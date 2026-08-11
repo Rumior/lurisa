@@ -10,3 +10,5 @@ fix.js
 prisma/migrations
 .DS_Store
 Thumbs.db
+.vercel
+.env*
