@@ -1,0 +1,12 @@
+﻿node_modules
+.env.local
+.env
+.next
+out
+*.log
+fix-intent.ts
+fix-intent.sql
+fix.js
+prisma/migrations
+.DS_Store
+Thumbs.db
