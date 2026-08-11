@@ -170,7 +170,7 @@ function buildIntentCandidates(mem: ExtractedMemory): IntentCandidate[] {
     mem.category === 'RELATIONSHIPS';
 
   const morningOf = new Date(eventDate);
-  morningOf.setHours(8, 0, 0, 0);
+  morningOf.setHours(5, 0, 0, 0); // 5 AM UTC = 8 AM EAT (+03:00)
   if (morningOf > now) {
     intents.push({
       triggerType: 'DATE',
