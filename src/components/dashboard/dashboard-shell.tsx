@@ -122,13 +122,14 @@ export function DashboardShell({ user, children }: DashboardShellProps) {
           <div className="w-8" />
         </header>
 
-        <main className="pt-20 lg:pt-0 p-0 lg:p-8">
+        <main className="pt-16 lg:pt-0 p-0 lg:p-8 h-[calc(100dvh-4rem)] lg:h-auto overflow-hidden">
           {children}
         </main>
       </div>
     </div>
   );
 }
+
 
 
 
