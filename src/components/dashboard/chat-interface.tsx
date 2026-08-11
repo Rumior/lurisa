@@ -152,7 +152,7 @@ export function ChatInterface({ mode = 'chat' }: ChatInterfaceProps) {
 
   return (
     <div className="flex flex-col h-full max-w-3xl mx-auto">
-      {/* Chat header */}
+      {/* Header bar */}
       <div className="shrink-0 flex items-center space-x-3 px-4 py-2 border-b border-parchment-700/20">
         <div className="h-8 w-8 rounded-full bg-indigo-100 flex items-center justify-center">
           {config.icon}
@@ -166,7 +166,7 @@ export function ChatInterface({ mode = 'chat' }: ChatInterfaceProps) {
       {/* Messages */}
       <div className="flex-1 overflow-y-auto px-4 py-2 space-y-3 min-h-0">
         {messages.length === 0 ? (
-          <div className="flex flex-col items-center justify-center min-h-[200px] text-center space-y-4 py-4">
+          <div className="flex flex-col items-center justify-center py-8 text-center space-y-4">
             <div className="h-12 w-12 rounded-full bg-indigo-100 flex items-center justify-center">
               <Sparkles className="h-6 w-6 text-indigo-500" />
             </div>
@@ -175,17 +175,6 @@ export function ChatInterface({ mode = 'chat' }: ChatInterfaceProps) {
               <p className="text-xs text-charcoal-500 dark:text-parchment-300 max-w-sm">
                 I am here to listen and remember.
               </p>
-            </div>
-            <div className="flex flex-wrap justify-center gap-2 max-w-md">
-              {(['I slept well, ready for the day', 'Feeling a bit anxious about today', 'Excited about my meeting later'] as string[]).map((suggestion) => (
-                <button
-                  key={suggestion}
-                  onClick={() => setInput(suggestion)}
-                  className="px-3 py-1.5 rounded-full bg-parchment-500/30 text-xs text-charcoal-500 hover:bg-parchment-500 transition-colors"
-                >
-                  {suggestion}
-                </button>
-              ))}
             </div>
           </div>
         ) : (
@@ -216,8 +205,8 @@ export function ChatInterface({ mode = 'chat' }: ChatInterfaceProps) {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Input - flush against bottom */}
-      <div className="shrink-0 flex items-end space-x-2 px-4 py-1 border-t border-parchment-700/20 bg-parchment-100 dark:bg-indigo-900">
+      {/* Input - completely separate container at the bottom */}
+      <div className="shrink-0 flex items-end space-x-2 px-4 py-2 border-t border-parchment-700/20 bg-parchment-100 dark:bg-indigo-900">
         <Textarea
           value={input}
           onChange={(e) => setInput(e.target.value)}
