@@ -375,6 +375,8 @@ Return a JSON object with this exact shape:
 Rules:
 - Only extract facts ABOUT THE USER (not the assistant).
 - The user's name is ${userName}. Use "${userName}" instead of "the user" or "User" in every statement.
+- The user's name is ${userName}. Use "${userName}" instead of "the user" or "User" in every statement.
+- The user's name is ${userName}. Use "${userName}" instead of "the user" or "User" in every statement.
 - Be concise. One sentence per memory.
 - Include the company name, person name, or specific location in EVERY statement.
 - Include the date or time reference in EVERY statement (e.g., "tomorrow", "Friday", "next week").
