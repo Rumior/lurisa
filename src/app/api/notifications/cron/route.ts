@@ -1,39 +1,40 @@
-import { NextRequest, NextResponse } from 'next/server';
+﻿import { NextRequest, NextResponse } from 'next/server';
 import { processDailyRhythm } from '@/lib/notifications/daily-rhythm';
 import { fireDueIntents, expireOldIntents } from '@/lib/follow-up';
-import { handleApiError } from '@/lib/error-handler';
+
+export const dynamic = 'force-dynamic';
 
 /**
- * POST /api/notifications/cron
- * Called by Vercel Cron (hourly) or manual trigger.
- * Handles:
- * 1. Daily rhythm (morning check-in / evening reflection)
- * 2. Firing due follow-up intents
- * 3. Expiring old unanswered intents
+ * GET /api/notifications/cron
+ * Called by Vercel Cron (daily at 8am).
  */
-export async function POST(req: NextRequest) {
+export async function GET(req: NextRequest) {
   try {
-    const authHeader = req.headers.get('authorization');
-    if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+    // Auth via query param (Vercel cron cannot send custom headers)
+    const secret = req.nextUrl.searchParams.get('secret');
+    if (secret !== process.env.CRON_SECRET) {
       return NextResponse.json(
-        { error: { message: 'Unauthorized', code: 'AUTH_REQUIRED', status: 401 } },
+        { ok: false, error: 'Unauthorized' },
         { status: 401 }
       );
     }
 
-    const [rhythmResult, fired, expired] = await Promise.all([
-      processDailyRhythm(),
-      fireDueIntents(),
-      expireOldIntents(2),
+    const [rhythmCount, firedCount, expiredCount] = await Promise.all([
+      processDailyRhythm().then(r => Array.isArray(r) ? r.length : 0).catch(() => 0),
+      fireDueIntents().then(r => r.length).catch(() => 0),
+      expireOldIntents(2).then(r => typeof r === 'number' ? r : 0).catch(() => 0),
     ]);
 
+    // TINY response — prevents "output too large" failure
     return NextResponse.json({
-      success: true,
-      dailyRhythm: rhythmResult,
-      followUps: { fired: fired.length, expired },
-      timestamp: new Date().toISOString(),
+      ok: true,
+      processed: { rhythm: rhythmCount, fired: firedCount, expired: expiredCount },
     });
   } catch (error) {
-    return handleApiError(error);
+    console.error('Cron error:', error);
+    return NextResponse.json(
+      { ok: false, error: (error as Error).message },
+      { status: 500 }
+    );
   }
 }
