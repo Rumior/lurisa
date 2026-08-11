@@ -55,7 +55,13 @@ export async function extractMemoriesFromTurn(
       return;
     }
 
-    const extracted = await runExtraction(userMessage, assistantMessage);
+    const user = await prisma.users.findUnique({
+      where: { id: userId },
+      select: { name: true },
+    });
+    const userName = user?.name?.split(' ')[0] || 'User';
+
+    const extracted = await runExtraction(userMessage, assistantMessage, userName);
     if (!extracted.memories.length) {
       console.log('[MEMORY] No memories extracted.');
       return;
@@ -348,7 +354,7 @@ Answer ONLY "yes" or "no".`;
   }
 }
 
-async function runExtraction(userMsg: string, assistantMsg: string): Promise<ExtractionResult> {
+async function runExtraction(userMsg: string, assistantMsg: string, userName: string = 'User'): Promise<ExtractionResult> {
   const prompt = `You are a memory extraction engine for a personal AI companion. Extract factual memories from the conversation below.
 
 Return a JSON object with this exact shape:
@@ -368,6 +374,7 @@ Return a JSON object with this exact shape:
 
 Rules:
 - Only extract facts ABOUT THE USER (not the assistant).
+- The user's name is ${userName}. Use "${userName}" instead of "the user" or "User" in every statement.
 - Be concise. One sentence per memory.
 - Include the company name, person name, or specific location in EVERY statement.
 - Include the date or time reference in EVERY statement (e.g., "tomorrow", "Friday", "next week").
