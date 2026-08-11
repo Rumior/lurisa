@@ -1,10 +1,10 @@
 ﻿'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { signOut } from 'next-auth/react';
-import { MessageCircle, Brain, Target, Clock, Settings, LogOut, Menu, X, Moon, Sun } from 'lucide-react';
+import { MessageCircle, Brain, Target, Clock, Settings, LogOut, Menu, X, Moon, Sun, Bell } from 'lucide-react';
 import { Avatar } from '@/components/ui/avatar';
 import { useTheme } from 'next-themes';
 
@@ -18,13 +18,22 @@ const navigation = [
   { name: 'Memories', href: '/memories', icon: Brain },
   { name: 'Goals', href: '/goals', icon: Target },
   { name: 'Timeline', href: '/timeline', icon: Clock },
+  { name: 'Notifications', href: '/notifications', icon: Bell },
   { name: 'Settings', href: '/settings', icon: Settings },
 ];
 
 export function DashboardShell({ user, children }: DashboardShellProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
   const pathname = usePathname();
   const { theme, setTheme } = useTheme();
+
+  useEffect(() => {
+    fetch('/api/notifications/unread')
+      .then(r => r.ok ? r.json() : { count: 0 })
+      .then(data => setUnreadCount(data.count || 0))
+      .catch(() => setUnreadCount(0));
+  }, []);
 
   return (
     <div className="min-h-screen bg-parchment-300 dark:bg-parchment-900">
@@ -49,15 +58,23 @@ export function DashboardShell({ user, children }: DashboardShellProps) {
           <nav className="flex-1 px-4 py-6 space-y-1">
             {navigation.map((item) => {
               const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
+              const isNotifications = item.name === 'Notifications';
               return (
                 <Link
                   key={item.name}
                   href={item.href}
                   onClick={() => setSidebarOpen(false)}
-                  className={`flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${isActive ? 'bg-indigo-500 text-parchment-100' : 'text-charcoal-500 hover:bg-parchment-500 hover:text-charcoal-700 dark:text-parchment-300 dark:hover:bg-indigo-800'}`}
+                  className={`flex items-center justify-between px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${isActive ? 'bg-indigo-500 text-parchment-100' : 'text-charcoal-500 hover:bg-parchment-500 hover:text-charcoal-700 dark:text-parchment-300 dark:hover:bg-indigo-800'}`}
                 >
-                  <item.icon size={18} />
-                  <span>{item.name}</span>
+                  <div className="flex items-center space-x-3">
+                    <item.icon size={18} />
+                    <span>{item.name}</span>
+                  </div>
+                  {isNotifications && unreadCount > 0 && (
+                    <span className="inline-flex items-center justify-center h-5 min-w-[1.25rem] px-1.5 rounded-full bg-terracotta-500 text-parchment-100 text-xs font-bold">
+                      {unreadCount > 99 ? '99+' : unreadCount}
+                    </span>
+                  )}
                 </Link>
               );
             })}
@@ -112,4 +129,3 @@ export function DashboardShell({ user, children }: DashboardShellProps) {
     </div>
   );
 }
-
