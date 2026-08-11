@@ -121,7 +121,6 @@ export function ChatInterface({ mode = 'chat' }: ChatInterfaceProps) {
         setCurrentConversationId(data.conversationId);
       }
     } catch (error) {
-      console.error('Chat error:', error);
       setMessages((prev) => [
         ...prev,
         {
@@ -152,7 +151,7 @@ export function ChatInterface({ mode = 'chat' }: ChatInterfaceProps) {
 
   return (
     <div className="flex flex-col h-full max-w-3xl mx-auto">
-      {/* Header bar */}
+      {/* Header */}
       <div className="shrink-0 flex items-center space-x-3 px-4 py-2 border-b border-parchment-700/20">
         <div className="h-8 w-8 rounded-full bg-indigo-100 flex items-center justify-center">
           {config.icon}
@@ -172,24 +171,17 @@ export function ChatInterface({ mode = 'chat' }: ChatInterfaceProps) {
             </div>
             <div>
               <h3 className="font-serif text-indigo-500 dark:text-indigo-300 mb-1">Start a conversation</h3>
-              <p className="text-xs text-charcoal-500 dark:text-parchment-300 max-w-sm">
-                I am here to listen and remember.
-              </p>
+              <p className="text-xs text-charcoal-500 dark:text-parchment-300">I am here to listen and remember.</p>
             </div>
           </div>
         ) : (
           messages.map((msg) => (
-            <div
-              key={msg.id}
-              className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
-            >
-              <div
-                className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed whitespace-pre-wrap ${
-                  msg.role === 'user'
-                    ? 'bg-indigo-500 text-parchment-100 rounded-br-md'
-                    : 'bg-parchment-100 dark:bg-indigo-900 text-charcoal-700 dark:text-parchment-100 border border-parchment-700/20 rounded-bl-md'
-                }`}
-              >
+            <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+              <div className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed whitespace-pre-wrap ${
+                msg.role === 'user'
+                  ? 'bg-indigo-500 text-parchment-100 rounded-br-md'
+                  : 'bg-parchment-100 dark:bg-indigo-900 text-charcoal-700 dark:text-parchment-100 border border-parchment-700/20 rounded-bl-md'
+              }`}>
                 {msg.content}
               </div>
             </div>
@@ -205,20 +197,20 @@ export function ChatInterface({ mode = 'chat' }: ChatInterfaceProps) {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Input - completely separate container at the bottom */}
+      {/* Input */}
       <div className="shrink-0 flex items-end space-x-2 px-4 py-2 border-t border-parchment-700/20 bg-parchment-100 dark:bg-indigo-900">
         <Textarea
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder="Type your message..."
-          className="min-h-[40px] max-h-[120px] bg-transparent resize-none py-2 border-0 focus-visible:ring-0 focus-visible:ring-offset-0"
+          className="min-h-[40px] max-h-[80px] bg-transparent resize-none py-2 border-0 focus-visible:ring-0 focus-visible:ring-offset-0 flex-1"
           disabled={isLoading}
         />
         <Button
           onClick={handleSend}
           disabled={isLoading || !input.trim()}
-          className="h-[40px] w-[40px] shrink-0 p-0"
+          className="h-10 w-10 shrink-0 p-0"
         >
           {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
         </Button>
