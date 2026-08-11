@@ -1,4 +1,4 @@
-import { Redis } from 'ioredis';
+﻿import { Redis } from 'ioredis';
 
 const globalForRedis = globalThis as unknown as {
   redis: Redis | undefined;
@@ -12,17 +12,19 @@ function createRedisClient(): Redis {
     return new Redis({
       host: 'localhost',
       port: 6379,
+      lazyConnect: true,
       retryStrategy: (times) => Math.min(times * 50, 2000),
-      maxRetriesPerRequest: null,
-      enableReadyCheck: true,
+      maxRetriesPerRequest: 3,
+      enableOfflineQueue: false,
     });
   }
 
   if (url.startsWith('rediss://') || url.startsWith('redis://')) {
     return new Redis(url, {
+      lazyConnect: true,
       retryStrategy: (times) => Math.min(times * 50, 2000),
-      maxRetriesPerRequest: null,
-      enableReadyCheck: true,
+      maxRetriesPerRequest: 3,
+      enableOfflineQueue: false,
       keepAlive: 30000,
     });
   }
@@ -31,15 +33,21 @@ function createRedisClient(): Redis {
   return new Redis({
     host: host || 'localhost',
     port: parseInt(port || '6379'),
+    lazyConnect: true,
     retryStrategy: (times) => Math.min(times * 50, 2000),
-    maxRetriesPerRequest: null,
-    enableReadyCheck: true,
+    maxRetriesPerRequest: 3,
+    enableOfflineQueue: false,
   });
 }
 
 export const redis = globalForRedis.redis ?? createRedisClient();
 
-if (process.env.NODE_ENV !== 'production') globalForRedis.redis = redis;
+// ALWAYS cache the connection, even in production (serverless needs singleton)
+globalForRedis.redis = redis;
+
+redis.on('error', (err) => {
+  console.error('[REDIS] Connection error:', err.message);
+});
 
 // Redis key helpers - all scoped by user_id for sharding alignment
 export const redisKeys = {
