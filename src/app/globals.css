@@ -1,0 +1,93 @@
+﻿@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 42 33% 94%;
+    --foreground: 0 0% 18%;
+    --card: 40 60% 99%;
+    --card-foreground: 0 0% 18%;
+    --popover: 40 60% 99%;
+    --popover-foreground: 0 0% 18%;
+    --primary: 218 32% 25%;
+    --primary-foreground: 40 60% 99%;
+    --secondary: 120 14% 61%;
+    --secondary-foreground: 0 0% 18%;
+    --muted: 42 20% 88%;
+    --muted-foreground: 40 2% 37%;
+    --accent: 32 55% 52%;
+    --accent-foreground: 0 0% 18%;
+    --destructive: 0 48% 44%;
+    --destructive-foreground: 40 60% 99%;
+    --border: 42 20% 82%;
+    --input: 42 20% 88%;
+    --ring: 218 32% 25%;
+    --radius: 0.625rem;
+  }
+
+  .dark {
+    --background: 36 11% 10%;
+    --foreground: 40 60% 99%;
+    --card: 218 30% 12%;
+    --card-foreground: 40 60% 99%;
+    --popover: 218 30% 12%;
+    --popover-foreground: 40 60% 99%;
+    --primary: 215 16% 65%;
+    --primary-foreground: 218 30% 12%;
+    --secondary: 120 14% 74%;
+    --secondary-foreground: 0 0% 18%;
+    --muted: 36 11% 15%;
+    --muted-foreground: 40 5% 60%;
+    --accent: 36 45% 67%;
+    --accent-foreground: 0 0% 18%;
+    --destructive: 0 48% 44%;
+    --destructive-foreground: 40 60% 99%;
+    --border: 36 11% 20%;
+    --input: 36 11% 15%;
+    --ring: 215 16% 65%;
+  }
+}
+
+@layer base {
+  * {
+    border-color: hsl(var(--border));
+  }
+  
+  body {
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
+  }
+  
+  ::-webkit-scrollbar {
+    width: 8px;
+  }
+  
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  
+  ::-webkit-scrollbar-thumb {
+    background-color: hsl(var(--border));
+    border-radius: 9999px;
+  }
+  
+  ::selection {
+    background-color: hsl(var(--primary) / 0.2);
+    color: hsl(var(--primary));
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+  
+  .journal-shadow {
+    box-shadow: 0 1px 3px rgba(43, 58, 85, 0.08), 0 4px 12px rgba(43, 58, 85, 0.05);
+  }
+  
+  .journal-shadow-lg {
+    box-shadow: 0 2px 8px rgba(43, 58, 85, 0.08), 0 8px 24px rgba(43, 58, 85, 0.06);
+  }
+}
