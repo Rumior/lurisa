@@ -148,7 +148,7 @@ export function ChatInterface({ mode = 'chat' }: { mode?: 'chat' | 'morning' | '
 
   return (
     <div className="flex flex-col h-full max-w-3xl mx-auto">
-      <div className="flex items-center space-x-3 mb-6 pb-4 border-b border-parchment-700/20">
+      <div className="flex items-center space-x-3 mb-2 lg:mb-6 pb-2 lg:pb-4 border-b border-parchment-700/20">
         <div className="h-10 w-10 rounded-full bg-indigo-100 flex items-center justify-center">
           {config.icon}
         </div>
@@ -158,7 +158,7 @@ export function ChatInterface({ mode = 'chat' }: { mode?: 'chat' | 'morning' | '
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto space-y-4 mb-4 pr-2">
+      <div className="flex-1 overflow-y-auto space-y-4 pr-2">
         {messages.length === 0 ? (
           <EmptyChatState mode={mode} onSuggestion={(text) => setInput(text)} />
         ) : (
@@ -189,7 +189,7 @@ export function ChatInterface({ mode = 'chat' }: { mode?: 'chat' | 'morning' | '
         <div ref={messagesEndRef} />
       </div>
 
-      <div className="flex items-end space-x-2 pt-4 border-t border-parchment-700/20">
+      <div className="flex items-end space-x-2 pt-2 lg:pt-4 border-t border-parchment-700/20">
         <Textarea
           value={input}
           onChange={(e) => setInput(e.target.value)}
@@ -242,6 +242,7 @@ function EmptyChatState({ mode, onSuggestion }: { mode: string; onSuggestion: (t
     </div>
   );
 }
+
 
 
 
