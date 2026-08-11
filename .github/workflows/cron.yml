@@ -2,8 +2,8 @@
 
 on:
   schedule:
-    - cron: '0 8 * * *'   # 8:00 AM UTC daily
-  workflow_dispatch:      # Allows manual trigger from GitHub
+    - cron: '0 8 * * *'
+  workflow_dispatch:
 
 jobs:
   cron:
@@ -11,6 +11,5 @@ jobs:
     steps:
       - name: Hit notification cron endpoint
         run: |
-          curl -s -o /dev/null -w "%{http_code}" \
-            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
-            "${{ vars.APP_URL || 'https://your-app.vercel.app' }}/api/notifications/cron"
+          curl -sf -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            "https://lurisa.vercel.app/api/notifications/cron" || exit 1
