@@ -1,7 +1,7 @@
 ﻿{
   "crons": [
     {
-      "path": "/api/notifications/cron?secret=YOUR_CRON_SECRET",
+      "path": "/api/notifications/cron",
       "schedule": "0 8 * * *"
     }
   ]

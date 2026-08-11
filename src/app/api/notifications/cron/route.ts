@@ -7,12 +7,12 @@ export const dynamic = 'force-dynamic';
 /**
  * GET /api/notifications/cron
  * Called by Vercel Cron (daily at 8am).
+ * Vercel automatically sends: Authorization: Bearer <CRON_SECRET>
  */
 export async function GET(req: NextRequest) {
   try {
-    // Auth via query param (Vercel cron cannot send custom headers)
-    const secret = req.nextUrl.searchParams.get('secret');
-    if (secret !== process.env.CRON_SECRET) {
+    const authHeader = req.headers.get('authorization');
+    if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
       return NextResponse.json(
         { ok: false, error: 'Unauthorized' },
         { status: 401 }
@@ -25,7 +25,6 @@ export async function GET(req: NextRequest) {
       expireOldIntents(2).then(r => typeof r === 'number' ? r : 0).catch(() => 0),
     ]);
 
-    // TINY response — prevents "output too large" failure
     return NextResponse.json({
       ok: true,
       processed: { rhythm: rhythmCount, fired: firedCount, expired: expiredCount },
