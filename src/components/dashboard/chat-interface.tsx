@@ -152,7 +152,7 @@ export function ChatInterface({ mode = 'chat' }: ChatInterfaceProps) {
 
   return (
     <div className="flex flex-col h-full max-w-3xl mx-auto">
-      {/* Header info - compact, no wasted space */}
+      {/* Chat header */}
       <div className="shrink-0 flex items-center space-x-3 px-4 py-2 border-b border-parchment-700/20">
         <div className="h-8 w-8 rounded-full bg-indigo-100 flex items-center justify-center">
           {config.icon}
@@ -163,10 +163,31 @@ export function ChatInterface({ mode = 'chat' }: ChatInterfaceProps) {
         </div>
       </div>
 
-      {/* Messages - scrollable, takes all remaining space */}
+      {/* Messages */}
       <div className="flex-1 overflow-y-auto px-4 py-2 space-y-3 min-h-0">
         {messages.length === 0 ? (
-          <EmptyChatState mode={mode} onSuggestion={(text) => setInput(text)} />
+          <div className="flex flex-col items-center justify-center min-h-[200px] text-center space-y-4 py-4">
+            <div className="h-12 w-12 rounded-full bg-indigo-100 flex items-center justify-center">
+              <Sparkles className="h-6 w-6 text-indigo-500" />
+            </div>
+            <div>
+              <h3 className="font-serif text-indigo-500 dark:text-indigo-300 mb-1">Start a conversation</h3>
+              <p className="text-xs text-charcoal-500 dark:text-parchment-300 max-w-sm">
+                I am here to listen and remember.
+              </p>
+            </div>
+            <div className="flex flex-wrap justify-center gap-2 max-w-md">
+              {(['I slept well, ready for the day', 'Feeling a bit anxious about today', 'Excited about my meeting later'] as string[]).map((suggestion) => (
+                <button
+                  key={suggestion}
+                  onClick={() => setInput(suggestion)}
+                  className="px-3 py-1.5 rounded-full bg-parchment-500/30 text-xs text-charcoal-500 hover:bg-parchment-500 transition-colors"
+                >
+                  {suggestion}
+                </button>
+              ))}
+            </div>
+          </div>
         ) : (
           messages.map((msg) => (
             <div
@@ -195,56 +216,23 @@ export function ChatInterface({ mode = 'chat' }: ChatInterfaceProps) {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Input - sits flush at the bottom, no gaps */}
-      <div className="shrink-0 flex items-end space-x-2 px-4 py-2 border-t border-parchment-700/20 bg-parchment-100/50 dark:bg-indigo-900/50">
+      {/* Input - flush against bottom */}
+      <div className="shrink-0 flex items-end space-x-2 px-4 py-1 border-t border-parchment-700/20 bg-parchment-100 dark:bg-indigo-900">
         <Textarea
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder="Type your message..."
-          className="min-h-[44px] max-h-[120px] bg-parchment-100 resize-none py-2.5"
+          className="min-h-[40px] max-h-[120px] bg-transparent resize-none py-2 border-0 focus-visible:ring-0 focus-visible:ring-offset-0"
           disabled={isLoading}
         />
         <Button
           onClick={handleSend}
           disabled={isLoading || !input.trim()}
-          className="h-[44px] w-[44px] shrink-0 p-0"
+          className="h-[40px] w-[40px] shrink-0 p-0"
         >
           {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
         </Button>
-      </div>
-    </div>
-  );
-}
-
-function EmptyChatState({ mode, onSuggestion }: { mode: string; onSuggestion: (text: string) => void }) {
-  const suggestions: Record<string, string[]> = {
-    chat: [],
-    morning: ['I slept well, ready for the day', 'Feeling a bit anxious about today', 'Excited about my meeting later', 'Just taking it slow this morning'],
-    evening: ['Today was productive', 'Had a difficult conversation', 'Learned something new', 'Grateful for small moments'],
-  };
-
-  return (
-    <div className="flex flex-col items-center justify-center h-full text-center space-y-4 py-4">
-      <div className="h-12 w-12 rounded-full bg-indigo-100 flex items-center justify-center">
-        <Sparkles className="h-6 w-6 text-indigo-500" />
-      </div>
-      <div>
-        <h3 className="font-serif text-indigo-500 dark:text-indigo-300 mb-1">Start a conversation</h3>
-        <p className="text-xs text-charcoal-500 dark:text-parchment-300 max-w-sm">
-          I am here to listen and remember.
-        </p>
-      </div>
-      <div className="flex flex-wrap justify-center gap-2 max-w-md">
-        {suggestions[mode]?.map((suggestion) => (
-          <button
-            key={suggestion}
-            onClick={() => onSuggestion(suggestion)}
-            className="px-3 py-1.5 rounded-full bg-parchment-500/30 text-xs text-charcoal-500 hover:bg-parchment-500 transition-colors"
-          >
-            {suggestion}
-          </button>
-        ))}
       </div>
     </div>
   );

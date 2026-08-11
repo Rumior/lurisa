@@ -1,37 +1,45 @@
 ﻿'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { ChatInterface } from '@/components/dashboard/chat-interface';
 
 export default function ChatPage() {
+  const ref = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
-    // On mobile: lock body scroll so the browser CANNOT scroll the page
-    // This keeps the header completely frozen at the top
-    const isMobile = window.innerWidth < 1024;
-    if (!isMobile) return;
+    if (window.innerWidth >= 1024) return;
 
-    const html = document.documentElement;
-    const body = document.body;
-    const origHtml = html.style.overflow;
-    const origBody = body.style.overflow;
+    const el = ref.current;
+    if (!el) return;
 
-    html.style.overflow = 'hidden';
-    body.style.overflow = 'hidden';
+    const setHeight = () => {
+      const vv = window.visualViewport;
+      const h = vv ? vv.height : window.innerHeight;
+      el.style.height = `${h - 64}px`;
+    };
+
+    setHeight();
+    requestAnimationFrame(setHeight);
+    window.visualViewport?.addEventListener('resize', setHeight);
+
+    document.documentElement.style.overflow = 'hidden';
+    document.body.style.overflow = 'hidden';
 
     return () => {
-      html.style.overflow = origHtml;
-      body.style.overflow = origBody;
+      window.visualViewport?.removeEventListener('resize', setHeight);
+      document.documentElement.style.overflow = '';
+      document.body.style.overflow = '';
     };
   }, []);
 
   return (
     <>
-      {/* MOBILE: Completely detached fixed layer below header */}
-      <div className="lg:hidden fixed top-16 left-0 right-0 bottom-0 flex flex-col bg-parchment-300 dark:bg-parchment-900">
+      <div 
+        ref={ref}
+        className="lg:hidden fixed top-16 left-0 right-0 flex flex-col bg-parchment-300 dark:bg-parchment-900"
+      >
         <ChatInterface />
       </div>
-
-      {/* DESKTOP: Normal flow inside main */}
       <div className="hidden lg:block h-[calc(100vh-8rem)]">
         <ChatInterface />
       </div>
