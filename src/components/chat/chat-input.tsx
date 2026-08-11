@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+﻿import { useState, useEffect } from 'react';
 import { Send, Loader2 } from 'lucide-react';
 
 interface ChatInputProps {
@@ -10,55 +10,7 @@ interface ChatInputProps {
 export function ChatInput({ onSend, disabled, placeholder }: ChatInputProps) {
   const [input, setInput] = useState('');
 
-  // AGGRESSIVE FOCUS: try every 100ms for 3 seconds
-  useEffect(() => {
-    let attempts = 0;
-    const interval = setInterval(() => {
-      const el = document.getElementById('lurisa-chat-input') as HTMLTextAreaElement | null;
-      if (el) {
-        el.focus();
-        el.setSelectionRange(el.value.length, el.value.length);
-      }
-      attempts++;
-      if (attempts > 30) clearInterval(interval);
-    }, 100);
-    return () => clearInterval(interval);
-  }, []);
-
-  // Re-focus after AI responds
-  useEffect(() => {
-    if (!disabled) {
-      const timer = setTimeout(() => {
-        const el = document.getElementById('lurisa-chat-input') as HTMLTextAreaElement | null;
-        if (el) {
-          el.focus();
-          el.setSelectionRange(el.value.length, el.value.length);
-        }
-      }, 100);
-      return () => clearTimeout(timer);
-    }
-  }, [disabled]);
-
-  // Capture typing anywhere on the page
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      const target = e.target as HTMLElement;
-      const isInInput = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
-      
-      if (!isInInput && e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey && !disabled) {
-        const el = document.getElementById('lurisa-chat-input') as HTMLTextAreaElement | null;
-        if (!el) return;
-        e.preventDefault();
-        el.focus();
-        setInput(prev => prev + e.key);
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [disabled]);
-
-  // Auto-resize
+  // Auto-resize textarea
   useEffect(() => {
     const el = document.getElementById('lurisa-chat-input') as HTMLTextAreaElement | null;
     if (el) {

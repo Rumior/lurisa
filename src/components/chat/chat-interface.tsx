@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useState, useRef, useEffect } from 'react';
 import { ChatMessageList } from './message-list';
@@ -100,7 +100,7 @@ export function ChatInterface({ userId }: ChatInterfaceProps) {
   }
 
   return (
-    <div className="flex flex-col h-full max-w-3xl mx-auto">
+    <div className="flex flex-col h-[calc(100dvh-5rem)] lg:h-full max-w-3xl mx-auto">
       {/* Messages */}
       <div className="flex-1 overflow-y-auto px-4 py-6 space-y-6">
         {messages.length === 0 && (
@@ -140,3 +140,4 @@ export function ChatInterface({ userId }: ChatInterfaceProps) {
     </div>
   );
 }
+

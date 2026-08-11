@@ -109,7 +109,7 @@ export function DashboardShell({ user, children }: DashboardShellProps) {
       </aside>
 
       <div className="lg:ml-64">
-        <header className="lg:hidden h-16 flex items-center justify-between px-4 border-b border-parchment-700/20 dark:border-indigo-800/30 bg-parchment-100 dark:bg-indigo-900">
+        <header className="fixed top-0 left-0 right-0 z-30 lg:hidden h-16 flex items-center justify-between px-4 border-b border-parchment-700/20 dark:border-indigo-800/30 bg-parchment-100 dark:bg-indigo-900">
           <button onClick={() => setSidebarOpen(true)} className="text-charcoal-500 dark:text-parchment-300">
             <Menu size={24} />
           </button>
@@ -122,10 +122,11 @@ export function DashboardShell({ user, children }: DashboardShellProps) {
           <div className="w-8" />
         </header>
 
-        <main className="p-4 sm:p-6 lg:p-8">
+        <main className="pt-20 lg:pt-0 p-4 sm:p-6 lg:p-8">
           {children}
         </main>
       </div>
     </div>
   );
 }
+
