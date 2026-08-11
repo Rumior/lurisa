@@ -13,7 +13,7 @@ interface Message {
 }
 
 interface ChatInterfaceProps {
-  userId: string;
+  userId?: string;
 }
 
 const SUGGESTIONS = [
@@ -28,6 +28,7 @@ export function ChatInterface({ userId }: ChatInterfaceProps) {
   const [isTyping, setIsTyping] = useState(false);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -60,7 +61,6 @@ export function ChatInterface({ userId }: ChatInterfaceProps) {
         body: JSON.stringify({
           message: content,
           conversationId,
-          history,
         }),
       });
 
@@ -100,9 +100,12 @@ export function ChatInterface({ userId }: ChatInterfaceProps) {
   }
 
   return (
-    <div className="flex flex-col h-[calc(100dvh-5rem)] lg:h-full max-w-3xl mx-auto">
-      {/* Messages */}
-      <div className="flex-1 overflow-y-auto px-4 py-6 space-y-6">
+    <div className="flex flex-col h-full max-w-3xl mx-auto">
+      {/* Messages - scrollable area */}
+      <div 
+        ref={messagesContainerRef}
+        className="flex-1 overflow-y-auto px-4 py-6 space-y-6"
+      >
         {messages.length === 0 && (
           <div className="space-y-4">
             <div className="text-center space-y-2 py-8">
@@ -133,15 +136,10 @@ export function ChatInterface({ userId }: ChatInterfaceProps) {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Input */}
-      <div className="border-t border-parchment-700/30 bg-parchment-100/50 dark:bg-indigo-900/50 px-4 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+      {/* Input - stays at bottom */}
+      <div className="flex-shrink-0 border-t border-parchment-700/30 bg-parchment-100/50 dark:bg-indigo-900/50 px-4 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
         <ChatInput onSend={sendMessage} disabled={isTyping} />
       </div>
     </div>
   );
 }
-
-
-
-
-
