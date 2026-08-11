@@ -147,7 +147,7 @@ export function ChatInterface({ mode = 'chat' }: { mode?: 'chat' | 'morning' | '
   const config = modeConfig[mode];
 
   return (
-    <div className="flex flex-col h-[calc(100vh-8rem)] max-w-3xl mx-auto">
+    <div className="flex flex-col h-full max-w-3xl mx-auto">
       <div className="flex items-center space-x-3 mb-6 pb-4 border-b border-parchment-700/20">
         <div className="h-10 w-10 rounded-full bg-indigo-100 flex items-center justify-center">
           {config.icon}
