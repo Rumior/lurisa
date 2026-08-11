@@ -1,4 +1,4 @@
-import * as React from 'react';
+﻿import * as React from 'react';
 import { cva, type VariantProps } from 'class-variance-authority';
 import { cn } from '@/lib/utils';
 
@@ -9,10 +9,10 @@ const badgeVariants = cva(
       variant: {
         default: 'border-transparent bg-indigo-500 text-parchment-100 hover:bg-indigo-700',
         secondary: 'border-transparent bg-sage-500 text-parchment-100 hover:bg-sage-700',
-        outline: 'text-charcoal-700 border-parchment-700',
+        outline: 'text-charcoal-700 border-parchment-700 dark:text-parchment-100 dark:border-indigo-800',
         amber: 'border-transparent bg-amber-500 text-parchment-100 hover:bg-amber-700',
         terracotta: 'border-transparent bg-terracotta-500 text-parchment-100 hover:bg-terracotta-700',
-        muted: 'border-transparent bg-parchment-500 text-charcoal-500',
+        muted: 'border-transparent bg-parchment-500 text-charcoal-500 dark:bg-indigo-800 dark:text-parchment-300',
       },
     },
     defaultVariants: {
