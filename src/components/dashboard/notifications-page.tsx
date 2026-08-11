@@ -7,8 +7,8 @@ interface Notification {
   title: string;
   body: string;
   type: string;
-  createdAt: string;
-  read: boolean;
+  sentAt: string;
+  readAt: string | null;
 }
 
 export function NotificationsPage() {
@@ -47,7 +47,7 @@ export function NotificationsPage() {
             <div className="flex items-center justify-between">
               <h3 className="font-medium text-foreground">{n.title}</h3>
               <span className="text-xs text-muted-foreground">
-                {new Date(n.createdAt).toLocaleDateString()}
+                {new Date(n.sentAt).toLocaleDateString()}
               </span>
             </div>
             <p className="mt-1 text-sm text-muted-foreground">{n.body}</p>

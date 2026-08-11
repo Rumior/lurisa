@@ -14,7 +14,7 @@ export async function GET(req: NextRequest) {
 
     const notifications = await prisma.notification_log.findMany({
       where: { userId: session.user.id },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { sentAt: 'desc' },
       take: 50,
     });
 
