@@ -28,7 +28,6 @@ export function ChatInterface({ userId }: ChatInterfaceProps) {
   const [isTyping, setIsTyping] = useState(false);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const messagesContainerRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -100,12 +99,9 @@ export function ChatInterface({ userId }: ChatInterfaceProps) {
   }
 
   return (
-    <div className="flex flex-col h-full max-w-3xl mx-auto">
+    <div className="flex flex-col min-h-[calc(100dvh-5rem)] lg:min-h-0 lg:h-full max-w-3xl mx-auto">
       {/* Messages - scrollable area */}
-      <div 
-        ref={messagesContainerRef}
-        className="flex-1 overflow-y-auto px-4 py-6 space-y-6"
-      >
+      <div className="flex-1 overflow-y-auto px-4 py-6 space-y-6">
         {messages.length === 0 && (
           <div className="space-y-4">
             <div className="text-center space-y-2 py-8">

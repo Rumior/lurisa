@@ -93,19 +93,5 @@
 }
 
 
-/* Mobile chat viewport fix */
-.chat-page-container {
-  position: fixed;
-  top: 4rem;
-  left: 0;
-  right: 0;
-  height: calc(var(--vvh, 100vh) - 4rem);
-  z-index: 10;
-}
 
-@media (min-width: 1024px) {
-  .chat-page-container {
-    position: static;
-    height: auto;
-  }
-}
+
