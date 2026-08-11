@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Memory Extraction Pipeline
  * Now with Follow-Up Engine integration: creates ScheduledIntents for
  * temporal-bearing, high-importance memories (proposal → check-in → anniversary).
@@ -116,8 +116,6 @@ export async function extractMemoriesFromTurn(
       seenStatements.push(normalized);
 
       // ── FOLLOW-UP ENGINE INTEGRATION ──
-      // If this memory has a temporal marker and is high-importance,
-      // create scheduled intents (e.g. "interview tomorrow" → check-in next day)
       if (memoryId && mem.temporalMarker) {
         const intents = buildIntentCandidates(mem);
         for (const intent of intents) {
@@ -150,16 +148,11 @@ export async function extractMemoriesFromTurn(
   }
 }
 
-/**
- * Build intent candidates from a memory with a temporal marker.
- * This is the "proposal → Sunday check-in → one-year anniversary" engine.
- */
 function buildIntentCandidates(mem: ExtractedMemory): IntentCandidate[] {
   const intents: IntentCandidate[] = [];
   const now = new Date();
   const marker = mem.temporalMarker?.toLowerCase(); if (!marker) return intents;
 
-  // Parse temporal marker into a concrete date
   const eventDate = parseTemporalMarker(marker, now);
   if (!eventDate) return intents;
 
@@ -176,7 +169,6 @@ function buildIntentCandidates(mem: ExtractedMemory): IntentCandidate[] {
     mem.category === 'STORIES' ||
     mem.category === 'RELATIONSHIPS';
 
-  // 1. Same-day encouragement (morning of the event)
   const morningOf = new Date(eventDate);
   morningOf.setHours(8, 0, 0, 0);
   if (morningOf > now) {
@@ -188,9 +180,8 @@ function buildIntentCandidates(mem: ExtractedMemory): IntentCandidate[] {
     });
   }
 
-  // 2. Check-in shortly after the event (the "How did it go?" moment)
   const checkIn = new Date(eventDate);
-  checkIn.setHours(eventDate.getHours() + 4); // 4 hours after event
+  checkIn.setHours(eventDate.getHours() + 4);
   if (checkIn > now) {
     intents.push({
       triggerType: 'RELATIVE',
@@ -200,7 +191,6 @@ function buildIntentCandidates(mem: ExtractedMemory): IntentCandidate[] {
     });
   }
 
-  // 3. One-year anniversary for milestone memories
   if (isMilestone && mem.importance > 0.6) {
     const anniversary = new Date(eventDate);
     anniversary.setFullYear(anniversary.getFullYear() + 1);
@@ -214,7 +204,6 @@ function buildIntentCandidates(mem: ExtractedMemory): IntentCandidate[] {
     });
   }
 
-  // 4. Goal reminders for goal-category memories
   if (mem.category === 'GOALS' && eventDate > now) {
     const reminder = new Date(eventDate);
     reminder.setDate(reminder.getDate() - 1);
@@ -264,7 +253,6 @@ function parseTemporalMarker(marker: string, relativeTo: Date): Date | null {
     return result;
   }
 
-  // Try parsing as a date string
   const parsed = new Date(lower);
   if (!isNaN(parsed.getTime())) return parsed;
 
@@ -350,7 +338,7 @@ Answer ONLY "yes" or "no".`;
     const answer = completion.choices[0]?.message?.content?.toLowerCase().trim() || '';
     return answer.includes('yes');
   } catch {
-    return true; // Default to extracting if classifier fails
+    return true;
   }
 }
 
@@ -374,8 +362,6 @@ Return a JSON object with this exact shape:
 
 Rules:
 - Only extract facts ABOUT THE USER (not the assistant).
-- The user's name is ${userName}. Use "${userName}" instead of "the user" or "User" in every statement.
-- The user's name is ${userName}. Use "${userName}" instead of "the user" or "User" in every statement.
 - The user's name is ${userName}. Use "${userName}" instead of "the user" or "User" in every statement.
 - Be concise. One sentence per memory.
 - Include the company name, person name, or specific location in EVERY statement.
@@ -406,15 +392,20 @@ Assistant: "${assistantMsg}"`;
 
     const memories = parsed.memories
       .filter(m => m.statement && m.statement.length > 5)
-      .map(m => ({
-        statement: m.statement.trim(),
-        category: m.category || 'DAILY_REFLECTIONS',
-        type: m.type || 'LONG_TERM',
-        confidence: Math.min(1, Math.max(0, m.confidence ?? 0.7)),
-        importance: Math.min(1, Math.max(0, m.importance ?? 0.5)),
-        entities: Array.isArray(m.entities) ? m.entities : [],
-        temporalMarker: m.temporalMarker,
-      }));
+      .map(m => {
+        const statement = m.statement.trim()
+          .replace(/\bthe user\b/gi, userName)
+          .replace(/\bUser\b/g, userName);
+        return {
+          statement,
+          category: m.category || 'DAILY_REFLECTIONS',
+          type: m.type || 'LONG_TERM',
+          confidence: Math.min(1, Math.max(0, m.confidence ?? 0.7)),
+          importance: Math.min(1, Math.max(0, m.importance ?? 0.5)),
+          entities: Array.isArray(m.entities) ? m.entities : [],
+          temporalMarker: m.temporalMarker,
+        };
+      });
 
     return { memories, worthExtracting: memories.length > 0 };
   } catch (error) {
