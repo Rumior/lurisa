@@ -1,30 +1,11 @@
-﻿import { NextResponse } from 'next/server';
+﻿import { NextResponse, NextRequest } from 'next/server';
 import { getToken } from 'next-auth/jwt';
 
-export async function middleware(req) {
+export async function middleware(req: NextRequest) {
   const pathname = req.nextUrl.pathname;
   const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
 
-  // Allow public auth routes
-  if (pathname.startsWith('/api/auth/')) {
-    return NextResponse.next();
-  }
-
-  // Allow health check
-  if (pathname === '/api/health') {
-    return NextResponse.next();
-  }
-
-  // Allow cron jobs ONLY with valid secret
-  if (pathname.startsWith('/api/notifications/cron') || pathname.startsWith('/api/follow-ups')) {
-    const authHeader = req.headers.get('authorization');
-    if (authHeader === `Bearer ${process.env.CRON_SECRET}`) {
-      return NextResponse.next();
-    }
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
-  // Allow all other API routes to handle their own auth
+  // Allow all API routes to handle their own auth
   if (pathname.startsWith('/api/')) {
     return NextResponse.next();
   }
