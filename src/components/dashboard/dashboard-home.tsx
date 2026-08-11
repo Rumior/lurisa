@@ -58,7 +58,7 @@ export function DashboardHome() {
             <AlertCircle className="h-5 w-5 text-amber-500" />
             <div>
               <p className="text-sm font-medium text-charcoal-700 dark:text-parchment-100">{stats.pendingConfirmations} memory{stats.pendingConfirmations > 1 ? 'ies' : 'y'} need your attention</p>
-              <p className="text-xs text-charcoal-500">lurisa found something that conflicts with what it knows</p>
+              <p className="text-xs text-charcoal-500 dark:text-parchment-300">lurisa found something that conflicts with what it knows</p>
             </div>
             <Link href="/memories" className="ml-auto"><Button size="sm" variant="outline">Review</Button></Link>
           </CardContent>
@@ -66,7 +66,7 @@ export function DashboardHome() {
       )}
 
       <div className="grid md:grid-cols-2 gap-6">
-        <Card className="border-parchment-700/30">
+        <Card className="border-parchment-700/30 dark:border-indigo-800/30">
           <CardHeader>
             <div className="flex items-center space-x-2">
               <Sparkles className="h-5 w-5 text-amber-500" />
@@ -79,7 +79,7 @@ export function DashboardHome() {
           </CardContent>
         </Card>
 
-        <Card className="border-parchment-700/30">
+        <Card className="border-parchment-700/30 dark:border-indigo-800/30">
           <CardHeader>
             <div className="flex items-center space-x-2">
               <Clock className="h-5 w-5 text-terracotta-500" />
@@ -108,17 +108,18 @@ export function DashboardHome() {
 function StatCard({ icon, label, value, href }: { icon: React.ReactNode; label: string; value: number | null; href: string }) {
   return (
     <Link href={href}>
-      <Card className="border-parchment-700/30 hover:journal-shadow-lg transition-shadow cursor-pointer">
+      <Card className="border-parchment-700/30 dark:border-indigo-800/30 hover:journal-shadow-lg transition-shadow cursor-pointer">
         <CardContent className="p-6">
           <div className="flex items-center justify-between">
             <div className="space-y-2">
               <p className="text-sm text-charcoal-500 dark:text-parchment-300">{label}</p>
               {value === null ? <Skeleton className="h-8 w-16" /> : <p className="text-3xl font-serif text-indigo-500 dark:text-indigo-300">{value}</p>}
             </div>
-            <div className="h-10 w-10 rounded-lg bg-parchment-500/50 flex items-center justify-center">{icon}</div>
+            <div className="h-10 w-10 rounded-lg bg-parchment-500/50 dark:bg-indigo-800/50 flex items-center justify-center">{icon}</div>
           </div>
         </CardContent>
       </Card>
     </Link>
   );
 }
+

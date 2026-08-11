@@ -34,7 +34,7 @@ export function DashboardShell({ user, children }: DashboardShellProps) {
 
       <aside className={`fixed top-0 left-0 z-50 h-full w-64 bg-parchment-100 dark:bg-indigo-900 border-r border-parchment-700/30 dark:border-parchment-700/10 transform transition-transform duration-200 ease-in-out ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
         <div className="flex flex-col h-full">
-          <div className="flex items-center justify-between h-16 px-6 border-b border-parchment-700/20">
+          <div className="flex items-center justify-between h-16 px-6 border-b border-parchment-700/20 dark:border-indigo-800/30">
             <Link href="/" className="flex items-center space-x-2">
               <div className="h-8 w-8 rounded-full bg-indigo-500 flex items-center justify-center">
                 <span className="text-parchment-100 font-serif text-lg">l</span>
@@ -63,7 +63,7 @@ export function DashboardShell({ user, children }: DashboardShellProps) {
             })}
           </nav>
 
-          <div className="p-4 border-t border-parchment-700/20 space-y-3">
+          <div className="p-4 border-t border-parchment-700/20 dark:border-indigo-800/30 space-y-3">
             <button
               onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
               className="flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm text-charcoal-500 hover:bg-parchment-500 w-full transition-colors dark:text-parchment-300 dark:hover:bg-indigo-800"
@@ -76,13 +76,13 @@ export function DashboardShell({ user, children }: DashboardShellProps) {
               <Avatar src={user.image} fallback={user.name || user.email} size="sm" />
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-charcoal-700 dark:text-parchment-100 truncate">{user.name || 'User'}</p>
-                <p className="text-xs text-charcoal-300 truncate">{user.email}</p>
+                <p className="text-xs text-charcoal-300 dark:text-charcoal-100 truncate">{user.email}</p>
               </div>
             </div>
 
             <button
               onClick={() => signOut({ callbackUrl: '/login' })}
-              className="flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm text-charcoal-500 hover:bg-error/10 hover:text-error w-full transition-colors"
+              className="flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm text-charcoal-500 hover:bg-error/10 hover:text-error dark:text-parchment-300 w-full transition-colors"
             >
               <LogOut size={18} />
               <span>Sign out</span>
@@ -92,8 +92,8 @@ export function DashboardShell({ user, children }: DashboardShellProps) {
       </aside>
 
       <div className="lg:ml-64">
-        <header className="lg:hidden h-16 flex items-center justify-between px-4 border-b border-parchment-700/20 bg-parchment-100 dark:bg-indigo-900">
-          <button onClick={() => setSidebarOpen(true)} className="text-charcoal-500">
+        <header className="lg:hidden h-16 flex items-center justify-between px-4 border-b border-parchment-700/20 dark:border-indigo-800/30 bg-parchment-100 dark:bg-indigo-900">
+          <button onClick={() => setSidebarOpen(true)} className="text-charcoal-500 dark:text-parchment-300">
             <Menu size={24} />
           </button>
           <div className="flex items-center space-x-2">
@@ -112,3 +112,4 @@ export function DashboardShell({ user, children }: DashboardShellProps) {
     </div>
   );
 }
+
