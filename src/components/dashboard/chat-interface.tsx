@@ -30,7 +30,7 @@ export function ChatInterface({ mode = 'chat' }: ChatInterfaceProps) {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isLoading]);
 
-  // Auto-resize textarea so it never has internal scroll (stops iOS scroll chaining)
+  // Auto-resize textarea so it never has internal scroll
   useEffect(() => {
     const el = document.getElementById('chat-textarea') as HTMLTextAreaElement | null;
     if (el) {
@@ -97,7 +97,6 @@ export function ChatInterface({ mode = 'chat' }: ChatInterfaceProps) {
     setMessages((prev) => [...prev, userMessage]);
     setInput('');
     
-    // Reset textarea height
     const el = document.getElementById('chat-textarea') as HTMLTextAreaElement | null;
     if (el) el.style.height = 'auto';
     
@@ -211,21 +210,21 @@ export function ChatInterface({ mode = 'chat' }: ChatInterfaceProps) {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Input — touch-none prevents drag-to-scroll-body on iOS */}
-      <div className="shrink-0 flex items-end space-x-2 px-4 pt-2 pb-0 border-t border-parchment-700/20 bg-parchment-100 dark:bg-indigo-900 touch-none">
+      {/* Input — zero bottom padding/margin, flush with keyboard */}
+      <div className="shrink-0 flex items-end space-x-2 px-4 pt-2 pb-0 mb-0 border-t border-parchment-700/20 bg-parchment-100 dark:bg-indigo-900 touch-none">
         <Textarea
           id="chat-textarea"
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder="Type your message..."
-          className="min-h-[40px] max-h-[120px] bg-transparent resize-none py-2 border-0 focus-visible:ring-0 focus-visible:ring-offset-0 flex-1"
+          className="!min-h-[40px] max-h-[120px] bg-transparent resize-none py-2 border-0 focus-visible:ring-0 focus-visible:ring-offset-0 flex-1 mb-0"
           disabled={isLoading}
         />
         <Button
           onClick={handleSend}
           disabled={isLoading || !input.trim()}
-          className="h-10 w-10 shrink-0 p-0"
+          className="h-10 w-10 shrink-0 p-0 mb-0"
         >
           {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
         </Button>
@@ -233,5 +232,3 @@ export function ChatInterface({ mode = 'chat' }: ChatInterfaceProps) {
     </div>
   );
 }
-
-
