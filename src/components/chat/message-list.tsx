@@ -14,18 +14,17 @@ interface ChatMessageListProps {
 export function ChatMessageList({ messages }: ChatMessageListProps) {
   return (
     <div className="space-y-6">
-      {messages.map((message, index) => (
+      {messages.map((message) => (
         <ChatMessage
           key={message.id}
           message={message}
-          isFirst={index === 0}
         />
       ))}
     </div>
   );
 }
 
-function ChatMessage({ message, isFirst }: { message: Message; isFirst: boolean }) {
+function ChatMessage({ message }: { message: Message }) {
   const isUser = message.role === 'USER';
 
   return (
@@ -33,21 +32,7 @@ function ChatMessage({ message, isFirst }: { message: Message; isFirst: boolean 
       'flex w-full',
       isUser ? 'justify-end' : 'justify-start'
     )}>
-      <div className={cn(
-        'flex max-w-[85%] sm:max-w-[75%]',
-        isUser ? 'flex-row-reverse' : 'flex-row'
-      )}>
-        {/* Avatar */}
-        <div className={cn(
-          'flex-shrink-0 h-8 w-8 rounded-full flex items-center justify-center text-xs font-medium',
-          isUser
-            ? 'bg-sage-500 text-parchment-100 ml-3'
-            : 'bg-indigo-500 text-parchment-100 mr-3'
-        )}>
-          {isUser ? 'You' : 'l'}
-        </div>
-
-        {/* Bubble */}
+      <div className="max-w-[85%] sm:max-w-[75%]">
         <div className={cn(
           'rounded-2xl px-4 py-3 text-sm leading-relaxed',
           isUser
@@ -68,7 +53,6 @@ function ChatMessage({ message, isFirst }: { message: Message; isFirst: boolean 
 }
 
 function MessageContent({ content }: { content: string }) {
-  // Simple markdown-like parsing for the chat
   const lines = content.split('\n');
 
   return (

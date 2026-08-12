@@ -1,9 +1,8 @@
-'use client';
+﻿'use client';
 
 import { useState, useRef, useEffect } from 'react';
 import { ChatMessageList } from './message-list';
 import { ChatInput } from './chat-input';
-import { VoiceInput } from './voice-input';
 import { TypingIndicator } from './typing-indicator';
 
 interface Message {
@@ -28,6 +27,7 @@ export function ChatInterface({ userId }: ChatInterfaceProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isTyping, setIsTyping] = useState(false);
   const [conversationId, setConversationId] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -37,6 +37,40 @@ export function ChatInterface({ userId }: ChatInterfaceProps) {
   useEffect(() => {
     scrollToBottom();
   }, [messages, isTyping]);
+
+  useEffect(() => {
+    let mounted = true;
+
+    async function init() {
+      try {
+        const savedId = localStorage.getItem('lurisa-conversation-id');
+        if (savedId) {
+          const res = await fetch(`/api/conversations/${savedId}`);
+          const data = await res.json();
+          if (!mounted) return;
+
+          if (data.conversation?.messages?.length) {
+            setConversationId(savedId);
+            setMessages(data.conversation.messages.map((m: any) => ({
+              id: m.id,
+              role: m.role.toUpperCase() as 'USER' | 'ASSISTANT',
+              content: m.content,
+              createdAt: m.createdAt,
+            })));
+          } else {
+            localStorage.removeItem('lurisa-conversation-id');
+          }
+        }
+      } catch (err) {
+        console.error('Failed to load conversation:', err);
+      } finally {
+        if (mounted) setIsLoading(false);
+      }
+    }
+
+    init();
+    return () => { mounted = false; };
+  }, []);
 
   async function sendMessage(content: string) {
     const userMessage: Message = {
@@ -72,6 +106,7 @@ export function ChatInterface({ userId }: ChatInterfaceProps) {
 
       if (data.conversationId && !conversationId) {
         setConversationId(data.conversationId);
+        localStorage.setItem('lurisa-conversation-id', data.conversationId);
       }
 
       const assistantMessage: Message = {
@@ -101,9 +136,14 @@ export function ChatInterface({ userId }: ChatInterfaceProps) {
 
   return (
     <div className="flex flex-col h-full max-w-3xl mx-auto">
-      {/* Messages */}
       <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 py-6 space-y-6">
-        {messages.length === 0 && (
+        {isLoading && (
+          <div className="flex items-center justify-center py-8">
+            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-500"></div>
+          </div>
+        )}
+
+        {messages.length === 0 && !isLoading && (
           <div className="space-y-4">
             <div className="text-center space-y-2 py-8">
               <h2 className="text-xl font-serif text-indigo-500 dark:text-indigo-300">
@@ -133,17 +173,9 @@ export function ChatInterface({ userId }: ChatInterfaceProps) {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Input */}
-      <div className="flex-shrink-0 border-t border-parchment-700/30 bg-parchment-100/50 dark:bg-indigo-900/50 px-4 pt-4 pb-6 flex items-end gap-3">
-        <VoiceInput onTranscription={sendMessage} disabled={isTyping} />
-        <div className="flex-1">
-          <ChatInput onSend={sendMessage} disabled={isTyping} />
-        </div>
+      <div className="flex-shrink-0 border-t border-parchment-700/30 bg-parchment-100/50 dark:bg-indigo-900/50 px-4 pt-4 pb-6">
+        <ChatInput onSend={sendMessage} disabled={isTyping || isLoading} />
       </div>
     </div>
   );
 }
-
-
-
-

@@ -1,7 +1,8 @@
-﻿'use client';
+'use client';
 
 import { useState, useEffect } from 'react';
 import { Send, Loader2 } from 'lucide-react';
+import { VoiceInput } from './voice-input';
 
 interface ChatInputProps {
   onSend: (message: string) => void;
@@ -55,13 +56,17 @@ export function ChatInput({ onSend, disabled, placeholder }: ChatInputProps) {
           {input.length > 0 && `${input.length} chars`}
         </span>
       </div>
-      <button
-        onClick={handleSubmit}
-        disabled={disabled || !input.trim()}
-        className="h-12 w-12 shrink-0 inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90"
-      >
-        {disabled ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}
-      </button>
+      {input.trim() ? (
+        <button
+          onClick={handleSubmit}
+          disabled={disabled || !input.trim()}
+          className="h-12 w-12 shrink-0 inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90"
+        >
+          {disabled ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}
+        </button>
+      ) : (
+        <VoiceInput onTranscription={onSend} disabled={disabled} />
+      )}
     </div>
   );
 }

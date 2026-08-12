@@ -1,0 +1,287 @@
+﻿'use client';
+
+import { useState, useRef, useEffect } from 'react';
+import { History, Plus, X } from 'lucide-react';
+import { ChatMessageList } from './message-list';
+import { ChatInput } from './chat-input';
+import { TypingIndicator } from './typing-indicator';
+
+interface Message {
+  id: string;
+  role: 'USER' | 'ASSISTANT';
+  content: string;
+  createdAt: string;
+}
+
+interface Conversation {
+  id: string;
+  title: string;
+  updatedAt: string;
+}
+
+interface ChatInterfaceProps {
+  userId?: string;
+}
+
+const SUGGESTIONS = [
+  "What's been on your mind recently?",
+  "Tell me about something you're looking forward to.",
+  "What made today meaningful?",
+  "How are you feeling right now?",
+];
+
+export function ChatInterface({ userId }: ChatInterfaceProps) {
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [isTyping, setIsTyping] = useState(false);
+  const [conversationId, setConversationId] = useState<string | null>(null);
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [showHistory, setShowHistory] = useState(false);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(true);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages, isTyping]);
+
+  useEffect(() => {
+    let mounted = true;
+
+    async function init() {
+      try {
+        const listRes = await fetch('/api/conversations');
+        const listData = await listRes.json();
+        if (!mounted) return;
+
+        if (listData.conversations) {
+          setConversations(listData.conversations);
+        }
+
+        const savedId = localStorage.getItem('lurisa-conversation-id');
+        if (savedId && listData.conversations?.some((c: Conversation) => c.id === savedId)) {
+          const convRes = await fetch(/api/conversations/);
+          const convData = await convRes.json();
+          if (!mounted) return;
+
+          if (convData.conversation) {
+            setConversationId(savedId);
+            setMessages(convData.conversation.messages.map((m: any) => ({
+              id: m.id,
+              role: m.role.toUpperCase() as 'USER' | 'ASSISTANT',
+              content: m.content,
+              createdAt: m.createdAt,
+            })));
+          }
+        } else if (savedId) {
+          localStorage.removeItem('lurisa-conversation-id');
+        }
+      } catch (err) {
+        console.error('Failed to initialize chat:', err);
+      } finally {
+        if (mounted) setIsLoadingHistory(false);
+      }
+    }
+
+    init();
+    return () => { mounted = false; };
+  }, []);
+
+  async function sendMessage(content: string) {
+    const userMessage: Message = {
+      id: crypto.randomUUID(),
+      role: 'USER',
+      content,
+      createdAt: new Date().toISOString(),
+    };
+
+    setMessages((prev) => [...prev, userMessage]);
+    setIsTyping(true);
+
+    try {
+      const history = messages.slice(-10).map((m) => ({
+        role: m.role.toLowerCase() as 'user' | 'assistant',
+        content: m.content,
+      }));
+
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: content,
+          conversationId,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (data.error) {
+        throw new Error(data.error.message || 'Failed to get response');
+      }
+
+      if (data.conversationId && !conversationId) {
+        setConversationId(data.conversationId);
+        localStorage.setItem('lurisa-conversation-id', data.conversationId);
+        const listRes = await fetch('/api/conversations');
+        const listData = await listRes.json();
+        if (listData.conversations) setConversations(listData.conversations);
+      }
+
+      const assistantMessage: Message = {
+        id: crypto.randomUUID(),
+        role: 'ASSISTANT',
+        content: data.response,
+        createdAt: new Date().toISOString(),
+      };
+
+      setMessages((prev) => [...prev, assistantMessage]);
+    } catch (error) {
+      const errorMessage: Message = {
+        id: crypto.randomUUID(),
+        role: 'ASSISTANT',
+        content: "I'm having a little trouble right now. Could you try again in a moment?",
+        createdAt: new Date().toISOString(),
+      };
+      setMessages((prev) => [...prev, errorMessage]);
+    } finally {
+      setIsTyping(false);
+    }
+  }
+
+  function onSuggestion(suggestion: string) {
+    sendMessage(suggestion);
+  }
+
+  function startNewChat() {
+    setMessages([]);
+    setConversationId(null);
+    setShowHistory(false);
+    localStorage.removeItem('lurisa-conversation-id');
+  }
+
+  async function loadConversation(id: string) {
+    setIsLoadingHistory(true);
+    setShowHistory(false);
+    try {
+      const res = await fetch(/api/conversations/);
+      const data = await res.json();
+      if (data.conversation) {
+        setConversationId(id);
+        setMessages(data.conversation.messages.map((m: any) => ({
+          id: m.id,
+          role: m.role.toUpperCase() as 'USER' | 'ASSISTANT',
+          content: m.content,
+          createdAt: m.createdAt,
+        })));
+        localStorage.setItem('lurisa-conversation-id', id);
+      }
+    } catch (err) {
+      console.error('Failed to load conversation:', err);
+    } finally {
+      setIsLoadingHistory(false);
+    }
+  }
+
+  return (
+    <div className="flex flex-col h-full max-w-3xl mx-auto relative">
+      {/* Header */}
+      <div className="flex-shrink-0 flex items-center justify-between px-4 py-2 border-b border-parchment-700/30 bg-parchment-100/50 dark:bg-indigo-900/50">
+        <button
+          onClick={() => setShowHistory(!showHistory)}
+          className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium text-charcoal-500 dark:text-parchment-300 hover:bg-parchment-500 dark:hover:bg-indigo-800 transition-colors"
+        >
+          <History size={16} />
+          History
+        </button>
+        <button
+          onClick={startNewChat}
+          className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium text-charcoal-500 dark:text-parchment-300 hover:bg-parchment-500 dark:hover:bg-indigo-800 transition-colors"
+        >
+          <Plus size={16} />
+          New Chat
+        </button>
+      </div>
+
+      {/* Messages */}
+      <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 py-6 space-y-6 relative">
+        {isLoadingHistory && (
+          <div className="flex items-center justify-center py-8">
+            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-500"></div>
+          </div>
+        )}
+
+        {showHistory && (
+          <div className="absolute inset-0 z-20 bg-parchment-100 dark:bg-indigo-900 p-4 overflow-y-auto">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-serif text-indigo-500 dark:text-indigo-300">Conversations</h3>
+              <button
+                onClick={() => setShowHistory(false)}
+                className="p-1 rounded-md hover:bg-parchment-500 dark:hover:bg-indigo-800 transition-colors"
+              >
+                <X size={18} className="text-charcoal-500 dark:text-parchment-300" />
+              </button>
+            </div>
+            {conversations.length === 0 ? (
+              <p className="text-sm text-charcoal-300 dark:text-parchment-400">No conversations yet.</p>
+            ) : (
+              <div className="space-y-2">
+                {conversations.map((conv) => (
+                  <button
+                    key={conv.id}
+                    onClick={() => loadConversation(conv.id)}
+                    className={"w-full text-left px-4 py-3 rounded-lg border transition-colors text-sm ${
+                      conv.id === conversationId
+                        ? "border-indigo-500 bg-indigo-50 dark:bg-indigo-800/50 text-indigo-700 dark:text-indigo-200"
+                        : "border-parchment-700/30 bg-parchment-100 hover:bg-parchment-500 dark:bg-indigo-900 dark:hover:bg-indigo-800 text-charcoal-500 dark:text-parchment-300"
+                    }}
+                  >
+                    <div className="font-medium truncate">{conv.title}</div>
+                    <div className="text-xs text-charcoal-300 dark:text-parchment-400 mt-1">
+                      {new Date(conv.updatedAt).toLocaleDateString()} {new Date(conv.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {messages.length === 0 && !isLoadingHistory && !showHistory && (
+          <div className="space-y-4">
+            <div className="text-center space-y-2 py-8">
+              <h2 className="text-xl font-serif text-indigo-500 dark:text-indigo-300">
+                Good to see you
+              </h2>
+              <p className="text-charcoal-500 dark:text-parchment-300 text-sm">
+                lurisa remembers what matters. Start a conversation.
+              </p>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {SUGGESTIONS.map((suggestion) => (
+                <button
+                  key={suggestion}
+                  onClick={() => onSuggestion(suggestion)}
+                  tabIndex={-1}
+                  className="text-left px-4 py-3 rounded-lg border border-parchment-700/30 bg-parchment-100 hover:bg-parchment-500 hover:border-parchment-700 transition-colors text-sm text-charcoal-500 dark:text-parchment-300"
+                >
+                  {suggestion}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <ChatMessageList messages={messages} />
+        {isTyping && <TypingIndicator />}
+        <div ref={messagesEndRef} />
+      </div>
+
+      {/* Input */}
+      <div className="flex-shrink-0 border-t border-parchment-700/30 bg-parchment-100/50 dark:bg-indigo-900/50 px-4 pt-4 pb-6">
+        <ChatInput onSend={sendMessage} disabled={isTyping || isLoadingHistory} />
+      </div>
+    </div>
+  );
+}
