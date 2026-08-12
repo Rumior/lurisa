@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { useState, useRef, useEffect } from 'react';
 import { ChatMessageList } from './message-list';
@@ -134,12 +134,16 @@ export function ChatInterface({ userId }: ChatInterfaceProps) {
       </div>
 
       {/* Input */}
-      <div className="flex-shrink-0 border-t border-parchment-700/30 bg-parchment-100/50 dark:bg-indigo-900/50 px-4 pt-4 pb-6">
-        <ChatInput onSend={sendMessage} disabled={isTyping} />
+      <div className="flex-shrink-0 border-t border-parchment-700/30 bg-parchment-100/50 dark:bg-indigo-900/50 px-4 pt-4 pb-6 flex items-end gap-3">
+        <VoiceInput onTranscription={sendMessage} disabled={isTyping} />
+        <div className="flex-1">
+          <ChatInput onSend={sendMessage} disabled={isTyping} />
+        </div>
       </div>
     </div>
   );
 }
+
 
 
 

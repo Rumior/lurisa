@@ -73,7 +73,7 @@ export function VoiceInput({ onTranscription, disabled }: VoiceInputProps) {
       type="button"
       onClick={isRecording ? stopRecording : startRecording}
       disabled={disabled || isProcessing}
-      className={`p-2 rounded-full transition-colors ${
+      className={`h-12 w-12 inline-flex items-center justify-center shrink-0 p-2 rounded-full transition-colors ${
         isRecording
           ? "bg-red-500 text-white animate-pulse"
           : "bg-parchment-500 hover:bg-parchment-700 text-charcoal-500"
@@ -84,3 +84,4 @@ export function VoiceInput({ onTranscription, disabled }: VoiceInputProps) {
     </button>
   );
 }
+
