@@ -1,14 +1,16 @@
-import { NextRequest, NextResponse } from 'next/server';
+﻿import { NextRequest, NextResponse } from 'next/server';
 import { getToken } from 'next-auth/jwt';
 import { generateLurisaResponse } from '@/lib/llm/gateway';
 import { extractMemoriesFromTurn } from '@/lib/memory/extraction';
 import { matchIntentToMessage } from '@/lib/follow-up';
+import { buildGoalContext, injectGoalContext } from '@/lib/goals/chat-context';
+import { detectMilestone } from '@/lib/timeline/milestones';
 import { prisma } from '@/lib/db';
 import { handleApiError, withRetry } from '@/lib/error-handler';
 
 export async function POST(req: NextRequest) {
   try {
-    // ── Auth ──
+    // â”€â”€ Auth â”€â”€
     const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
     if (!token?.id) {
       return NextResponse.json(
@@ -17,7 +19,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // ── Parse & validate ──
+    // â”€â”€ Parse & validate â”€â”€
     let body: { message?: string; conversationId?: string; history?: any[] };
     try {
       body = await req.json();
@@ -43,7 +45,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // ── Get or create conversation ──
+    // â”€â”€ Get or create conversation â”€â”€
     let convId = conversationId;
     if (!convId) {
       const conv = await withRetry(
@@ -59,7 +61,7 @@ export async function POST(req: NextRequest) {
       convId = conv.id;
     }
 
-    // ── Store user message ──
+    // â”€â”€ Store user message â”€â”€
     await withRetry(
       () => prisma.messages.create({
         data: {
@@ -72,9 +74,9 @@ export async function POST(req: NextRequest) {
       { maxRetries: 2, baseDelayMs: 100 }
     );
 
-    // ── OPEN-LOOP RESOLUTION (Upgrade 5) ──
+    // â”€â”€ OPEN-LOOP RESOLUTION (Upgrade 5) â”€â”€
     // Before treating this as a fresh topic, check if it's a response
-    // to a pending follow-up intent ("How did it go?" → "She said yes!")
+    // to a pending follow-up intent ("How did it go?" â†’ "She said yes!")
     let intentContext = '';
     let intentResolved = false;
 
@@ -96,7 +98,7 @@ export async function POST(req: NextRequest) {
       console.error('[CHAT] Intent resolution error (non-blocking):', err);
     }
 
-    // ── Generate response ──
+    // â”€â”€ Generate response â”€â”€
     const result = await generateLurisaResponse({
       message: intentContext ? `${intentContext}
 
@@ -105,7 +107,7 @@ ${message}` : message,
       conversationHistory: history || [],
     });
 
-    // ── Store assistant message ──
+    // â”€â”€ Store assistant message â”€â”€
     await withRetry(
       () => prisma.messages.create({
         data: {
@@ -118,12 +120,12 @@ ${message}` : message,
       { maxRetries: 2, baseDelayMs: 100 }
     );
 
-    // ── Async memory extraction (never blocks response) ──
+    // â”€â”€ Async memory extraction (never blocks response) â”€â”€
     extractMemoriesFromTurn(token.id, convId, message, result.response).catch((err) => {
       console.error('[CHAT] Memory extraction error (non-blocking):', err);
     });
 
-    // ── Return ──
+    // â”€â”€ Return â”€â”€
     return NextResponse.json({
       response: result.response,
       conversationId: convId,
@@ -139,3 +141,4 @@ ${message}` : message,
     return handleApiError(error);
   }
 }
+

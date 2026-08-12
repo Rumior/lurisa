@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { ChatMessageList } from './message-list';
 import { ChatInput } from './chat-input';
+import { VoiceInput } from './voice-input';
 import { TypingIndicator } from './typing-indicator';
 
 interface Message {
@@ -139,5 +140,6 @@ export function ChatInterface({ userId }: ChatInterfaceProps) {
     </div>
   );
 }
+
 
 

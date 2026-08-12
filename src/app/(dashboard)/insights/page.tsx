@@ -1,2 +1,5 @@
-import { InsightsPage } from '@/components/dashboard/insights-page';
-export default function InsightsRoute() { return <InsightsPage />; }
+import { InsightsDashboard } from "@/components/dashboard/insights-dashboard";
+
+export default function InsightsRoute() {
+  return <InsightsDashboard />;
+}

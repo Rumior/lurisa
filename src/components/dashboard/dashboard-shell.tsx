@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { signOut } from 'next-auth/react';
-import { MessageCircle, Brain, Target, Clock, Settings, LogOut, Menu, X, Moon, Sun, Bell } from 'lucide-react';
+import { MessageCircle, Brain, Target, Clock, Settings, LogOut, Menu, X, Moon, Sun, Bell, Lightbulb } from 'lucide-react';
 import { Avatar } from '@/components/ui/avatar';
 import { useTheme } from 'next-themes';
 
@@ -16,6 +16,7 @@ interface DashboardShellProps {
 const navigation = [
   { name: 'Chat', href: '/chat', icon: MessageCircle },
   { name: 'Memories', href: '/memories', icon: Brain },
+  { name: 'Insights', href: '/insights', icon: Lightbulb },
   { name: 'Goals', href: '/goals', icon: Target },
   { name: 'Timeline', href: '/timeline', icon: Clock },
   { name: 'Notifications', href: '/notifications', icon: Bell },
@@ -129,6 +130,7 @@ export function DashboardShell({ user, children }: DashboardShellProps) {
     </div>
   );
 }
+
 
 
 

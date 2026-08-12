@@ -21,6 +21,7 @@ import {
   Smartphone
 } from 'lucide-react';
 import { useTheme } from 'next-themes';
+import { PushNotificationManager } from '@/components/pwa/push-manager';
 
 interface UserProfile {
   name: string | null;
@@ -195,6 +196,9 @@ export default function SettingsPage() {
               <p className="text-sm text-charcoal-500">End-of-day progress and lesson capture</p>
             </div>
             <Switch checked={eveningReflection} onCheckedChange={setEveningReflection} />
+          </div>
+          <div className="pt-4 mt-2 border-t border-parchment-700/20">
+            <PushNotificationManager />
           </div>
         </CardContent>
       </Card>
@@ -372,3 +376,4 @@ function DeviceList() {
     </div>
   );
 }
+

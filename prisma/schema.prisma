@@ -326,6 +326,7 @@ model users {
 timezone    String?  @default("UTC")
   morningTime String?  @default("08:00")
   eveningTime String?  @default("20:00")
+  push_subscriptions push_subscriptions[]
 
   @@index([email])
 }
@@ -439,4 +440,16 @@ enum TriggerType {
   DATE
   RELATIVE
   RECURRENCE
+}
+
+model push_subscriptions {
+  id        String   @id @default(uuid())
+  userId    String
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now())
+  users     users    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
