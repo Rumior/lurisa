@@ -26,8 +26,9 @@ export default function ChatPage() {
 
     const resize = () => {
       const vv = window.visualViewport;
-      const keyboardHeight = window.innerHeight - (vv ? vv.height : window.innerHeight);
-      el.style.bottom = `${keyboardHeight}px`;
+      const h = vv ? vv.height : window.innerHeight;
+      el.style.height = `${Math.max(h - 64, 0)}px`;
+      el.style.bottom = '';
       window.scrollTo(0, 0);
     };
 
@@ -49,6 +50,8 @@ export default function ChatPage() {
 
       html.style.overflow = orig.htmlOverflow;
       body.style.overflow = orig.bodyOverflow;
+      el.style.height = '';
+      el.style.bottom = '';
     };
   }, []);
 
