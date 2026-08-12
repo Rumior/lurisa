@@ -36,7 +36,7 @@ export function DashboardShell({ user, children }: DashboardShellProps) {
   }, []);
 
   return (
-    <div className="min-h-screen bg-parchment-300 dark:bg-parchment-900">
+    <div className="min-h-[100dvh] bg-parchment-300 dark:bg-parchment-900">
       {sidebarOpen && (
         <div className="fixed inset-0 bg-charcoal-900/50 z-40 lg:hidden" onClick={() => setSidebarOpen(false)} />
       )}
@@ -129,6 +129,7 @@ export function DashboardShell({ user, children }: DashboardShellProps) {
     </div>
   );
 }
+
 
 
 
