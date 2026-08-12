@@ -212,7 +212,7 @@ export function ChatInterface({ mode = 'chat' }: ChatInterfaceProps) {
       </div>
 
       {/* Input — touch-none prevents drag-to-scroll-body on iOS */}
-      <div className="shrink-0 flex items-end space-x-2 px-4 py-2 border-t border-parchment-700/20 bg-parchment-100 dark:bg-indigo-900 touch-none">
+      <div className="shrink-0 flex items-end space-x-2 px-4 pt-2 pb-0 border-t border-parchment-700/20 bg-parchment-100 dark:bg-indigo-900 touch-none">
         <Textarea
           id="chat-textarea"
           value={input}
@@ -233,4 +233,5 @@ export function ChatInterface({ mode = 'chat' }: ChatInterfaceProps) {
     </div>
   );
 }
+
 

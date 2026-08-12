@@ -23,20 +23,15 @@ export default function ChatPage() {
       bodyHeight: body.style.height,
     };
 
-    // dvh shrinks with keyboard so body never exceeds visible area
     html.style.overflow = 'hidden';
     html.style.height = '100dvh';
     body.style.overflow = 'hidden';
     body.style.height = '100dvh';
 
     const resize = () => {
-      const vv = window.visualViewport;
-      const h = vv ? vv.height : window.innerHeight;
-      el.style.height = `${Math.max(h - 64, 0)}px`;
       window.scrollTo(0, 0);
     };
 
-    // Nuclear: prevent ALL touchmove outside the message list
     const preventScroll = (e: TouchEvent) => {
       const target = e.target as HTMLElement;
       if (target.closest('[data-scroll-area]')) return;
@@ -64,7 +59,7 @@ export default function ChatPage() {
     <>
       <div
         ref={chatRef}
-        className="lg:hidden fixed top-16 left-0 right-0 z-20 flex flex-col bg-parchment-300 dark:bg-parchment-900"
+        className="lg:hidden fixed top-16 left-0 right-0 bottom-0 z-20 flex flex-col bg-parchment-300 dark:bg-parchment-900"
       >
         <ChatInterface />
       </div>
