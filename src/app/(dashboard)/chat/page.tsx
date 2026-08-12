@@ -27,11 +27,11 @@ export default function ChatPage() {
     <>
       <div
         ref={chatRef}
-        className="lg:hidden fixed top-16 left-0 right-0 flex flex-col bg-parchment-300 dark:bg-parchment-900"
+        className="lg:hidden fixed top-16 left-0 right-0 z-20 h-[calc(100dvh-4rem)] flex flex-col bg-parchment-300 dark:bg-parchment-900"
       >
         <ChatInterface />
       </div>
-      <div className="hidden lg:block h-[calc(100vh-8rem)]">
+      <div className="hidden lg:block h-[calc(100vh-4rem)]">
         <ChatInterface />
       </div>
     </>

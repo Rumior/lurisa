@@ -1,4 +1,6 @@
-﻿import { useState, useEffect } from 'react';
+﻿'use client';
+
+import { useState, useEffect } from 'react';
 import { Send, Loader2 } from 'lucide-react';
 
 interface ChatInputProps {

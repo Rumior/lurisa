@@ -1,4 +1,4 @@
-import { cn } from '@/lib/utils';
+﻿import { cn } from '@/lib/utils';
 
 interface Message {
   id: string;
@@ -15,9 +15,9 @@ export function ChatMessageList({ messages }: ChatMessageListProps) {
   return (
     <div className="space-y-6">
       {messages.map((message, index) => (
-        <ChatMessage 
-          key={message.id} 
-          message={message} 
+        <ChatMessage
+          key={message.id}
+          message={message}
           isFirst={index === 0}
         />
       ))}
@@ -40,8 +40,8 @@ function ChatMessage({ message, isFirst }: { message: Message; isFirst: boolean 
         {/* Avatar */}
         <div className={cn(
           'flex-shrink-0 h-8 w-8 rounded-full flex items-center justify-center text-xs font-medium',
-          isUser 
-            ? 'bg-sage-500 text-parchment-100 ml-3' 
+          isUser
+            ? 'bg-sage-500 text-parchment-100 ml-3'
             : 'bg-indigo-500 text-parchment-100 mr-3'
         )}>
           {isUser ? 'You' : 'l'}
@@ -78,7 +78,7 @@ function MessageContent({ content }: { content: string }) {
           return <p key={i} className="font-semibold">{line.replace(/\*\*/g, '')}</p>;
         }
         if (line.startsWith('- ')) {
-          return <p key={i} className="pl-4">• {line.slice(2)}</p>;
+          return <p key={i} className="pl-4">{'\u2022'} {line.slice(2)}</p>;
         }
         if (line.trim() === '') {
           return <div key={i} className="h-2" />;
