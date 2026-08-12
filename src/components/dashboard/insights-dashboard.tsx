@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -18,7 +18,7 @@ interface Pattern {
 interface CrossInsight {
   type: string;
   description: string;
-  memoryIds: string[];
+  memoryIds?: string[];
   confidence: number;
 }
 
@@ -85,12 +85,12 @@ export function InsightsDashboard() {
                     <CardTitle className="text-base font-medium text-charcoal-700 dark:text-parchment-100">
                       {p.pattern}
                     </CardTitle>
-                    <Badge variant="secondary" className="text-xs">{p.frequency}×</Badge>
+                    <Badge variant="secondary" className="text-xs">{p.frequency}x</Badge>
                   </div>
                 </CardHeader>
                 <CardContent className="pt-0">
                   <p className="text-sm text-charcoal-500 dark:text-parchment-300 mb-3">{p.suggestion}</p>
-                  {p.examples.length > 0 && (
+                  {p.examples && p.examples.length > 0 && (
                     <div className="space-y-1">
                       {p.examples.map((ex, j) => (
                         <p key={j} className="text-xs text-charcoal-400 dark:text-charcoal-100 italic">"{ex}"</p>
@@ -125,3 +125,4 @@ export function InsightsDashboard() {
     </div>
   );
 }
+

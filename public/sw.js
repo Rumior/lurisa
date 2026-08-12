@@ -1,7 +1,14 @@
 const CACHE_NAME = "lurisa-v1";
 const STATIC_ASSETS = ["/","/chat","/memories","/goals","/timeline","/manifest.json"];
 
+// Disable aggressive caching in development
+const isDev = self.location.hostname === 'localhost' || self.location.hostname === '127.0.0.1';
+
 self.addEventListener("install", (event) => {
+  if (isDev) {
+    self.skipWaiting();
+    return;
+  }
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => cache.addAll(STATIC_ASSETS))
   );
@@ -9,6 +16,10 @@ self.addEventListener("install", (event) => {
 });
 
 self.addEventListener("activate", (event) => {
+  if (isDev) {
+    self.registration.unregister();
+    return;
+  }
   event.waitUntil(
     caches.keys().then((keys) =>
       Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k)))
@@ -18,6 +29,9 @@ self.addEventListener("activate", (event) => {
 });
 
 self.addEventListener("fetch", (event) => {
+  // In dev mode, never intercept - let Next.js HMR work properly
+  if (isDev) return;
+
   const { request } = event;
   const url = new URL(request.url);
 

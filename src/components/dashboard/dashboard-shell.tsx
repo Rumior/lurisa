@@ -99,7 +99,7 @@ export function DashboardShell({ user, children }: DashboardShellProps) {
             </div>
 
             <button
-              onClick={() => signOut({ callbackUrl: '/login' })}
+              onClick={async () => { await signOut({ redirect: false }); window.location.href = '/login'; }}
               className="flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm text-charcoal-500 hover:bg-error/10 hover:text-error dark:text-parchment-300 w-full transition-colors"
             >
               <LogOut size={18} />
@@ -130,6 +130,8 @@ export function DashboardShell({ user, children }: DashboardShellProps) {
     </div>
   );
 }
+
+
 
 
 

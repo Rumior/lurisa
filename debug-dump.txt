@@ -1,0 +1,2023 @@
+
+========== src/app/page.tsx ==========
+
+﻿import { redirect } from 'next/navigation';
+import { getServerSession } from 'next-auth/next';
+import { authOptions } from '@/lib/auth';
+import { DashboardHome } from '@/components/dashboard/dashboard-home';
+
+export default async function RootPage() {
+  const session = await getServerSession(authOptions);
+  
+  if (!session?.user?.id) {
+    redirect('/login');
+  }
+  
+  return <DashboardHome />;
+}
+
+
+========== src/app/(auth)/login/page.tsx ==========
+
+import { LoginForm } from '@/components/auth/login-form';
+import { Metadata } from 'next';
+
+export const metadata: Metadata = {
+  title: 'Sign In — lurisa',
+  description: 'Sign in to your lurisa account',
+};
+
+export default function LoginPage() {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-parchment-300 px-4">
+      <div className="w-full max-w-md">
+        <LoginForm />
+      </div>
+    </div>
+  );
+}
+
+
+========== src/app/(dashboard)/layout.tsx ==========
+
+import { getServerSession } from 'next-auth';
+import { redirect } from 'next/navigation';
+import { authOptions } from '@/lib/auth';
+import { DashboardShell } from '@/components/dashboard/dashboard-shell';
+
+export default async function DashboardLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  const session = await getServerSession(authOptions);
+
+  if (!session?.user?.id) {
+    redirect('/login');
+  }
+
+  return (
+    <DashboardShell user={session.user}>
+      {children}
+    </DashboardShell>
+  );
+}
+
+
+========== src/app/(dashboard)/chat/page.tsx ==========
+
+﻿import { ChatInterface } from '@/components/chat/chat-interface';
+
+export default function ChatPage() {
+  return (
+    <div className="h-[calc(100vh-4rem)]">
+      <ChatInterface />
+    </div>
+  );
+}
+
+========== src/app/(dashboard)/insights/page.tsx ==========
+
+import { InsightsDashboard } from "@/components/dashboard/insights-dashboard";
+
+export default function InsightsRoute() {
+  return <InsightsDashboard />;
+}
+
+========== src/app/api/auth/[...nextauth]/route.ts ==========
+
+﻿import NextAuth from "next-auth"
+import { authOptions } from "@/lib/auth"
+
+const handler = NextAuth(authOptions)
+
+export { handler as GET, handler as POST }
+
+
+========== src/app/api/chat/route.ts ==========
+
+﻿import { NextRequest, NextResponse } from 'next/server';
+import { getToken } from 'next-auth/jwt';
+import { generateLurisaResponse } from '@/lib/llm/gateway';
+import { extractMemoriesFromTurn } from '@/lib/memory/extraction';
+import { matchIntentToMessage } from '@/lib/follow-up';
+import { buildGoalContext, injectGoalContext } from '@/lib/goals/chat-context';
+import { detectMilestone } from '@/lib/timeline/milestones';
+import { prisma } from '@/lib/db';
+import { handleApiError, withRetry } from '@/lib/error-handler';
+
+export async function POST(req: NextRequest) {
+  try {
+    // â”€â”€ Auth â”€â”€
+    const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
+    if (!token?.id) {
+      return NextResponse.json(
+        { error: { message: 'Please sign in to continue.', code: 'AUTH_REQUIRED', status: 401 } },
+        { status: 401 }
+      );
+    }
+
+    // â”€â”€ Parse & validate â”€â”€
+    let body: { message?: string; conversationId?: string; history?: any[] };
+    try {
+      body = await req.json();
+    } catch {
+      return NextResponse.json(
+        { error: { message: 'Invalid JSON in request body.', code: 'BAD_REQUEST', status: 400 } },
+        { status: 400 }
+      );
+    }
+
+    const { message, conversationId, history } = body;
+    if (!message || typeof message !== 'string' || message.trim().length === 0) {
+      return NextResponse.json(
+        { error: { message: 'Message is required and cannot be empty.', code: 'VALIDATION_FAILED', status: 400 } },
+        { status: 400 }
+      );
+    }
+
+    if (message.length > 4000) {
+      return NextResponse.json(
+        { error: { message: 'Message is too long. Please keep it under 4000 characters.', code: 'VALIDATION_FAILED', status: 400 } },
+        { status: 400 }
+      );
+    }
+
+    // â”€â”€ Get or create conversation â”€â”€
+    let convId = conversationId;
+    if (!convId) {
+      const conv = await withRetry(
+        () => prisma.conversations.create({
+          data: {
+            userId: token.id,
+            title: message.slice(0, 50),
+            updatedAt: new Date(),
+          },
+        }),
+        { maxRetries: 2, baseDelayMs: 100 }
+      );
+      convId = conv.id;
+    }
+
+    // â”€â”€ Store user message â”€â”€
+    await withRetry(
+      () => prisma.messages.create({
+        data: {
+          conversationId: convId,
+          userId: token.id,
+          role: 'USER',
+          content: message,
+        },
+      }),
+      { maxRetries: 2, baseDelayMs: 100 }
+    );
+
+    // â”€â”€ OPEN-LOOP RESOLUTION (Upgrade 5) â”€â”€
+    // Before treating this as a fresh topic, check if it's a response
+    // to a pending follow-up intent ("How did it go?" â†’ "She said yes!")
+    let intentContext = '';
+    let intentResolved = false;
+
+    try {
+      const match = await matchIntentToMessage(token.id, message, convId);
+      if (match.matched && match.outcome) {
+        intentResolved = true;
+        intentContext = `The user is responding to a follow-up about: ${match.action}. `;
+        if (match.outcome.whatHappened) {
+          intentContext += `They reported: ${match.outcome.whatHappened}. `;
+        }
+        if (match.outcome.sentiment) {
+          intentContext += `Sentiment: ${match.outcome.sentiment}. `;
+        }
+        console.log(`[CHAT] Resolved intent ${match.intentId} for user ${token.id}`);
+      }
+    } catch (err) {
+      // Intent resolution failure should NOT block the chat
+      console.error('[CHAT] Intent resolution error (non-blocking):', err);
+    }
+
+    // â”€â”€ Generate response â”€â”€
+    // Fetch full conversation history from DB
+    const dbMessages = await prisma.messages.findMany({
+      where: { conversationId: convId },
+      orderBy: { createdAt: 'asc' },
+      select: { role: true, content: true },
+    });
+    const fullHistory = dbMessages.map((m) => ({
+      role: m.role.toLowerCase() as 'user' | 'assistant',
+      content: m.content,
+    }));
+
+    const result = await generateLurisaResponse({
+      message: intentContext ? `${intentContext}
+
+${message}` : message,
+      userId: token.id,
+      conversationHistory: fullHistory,
+    });
+
+    // â”€â”€ Store assistant message â”€â”€
+    await withRetry(
+      () => prisma.messages.create({
+        data: {
+          conversationId: convId,
+          userId: token.id,
+          role: 'ASSISTANT',
+          content: result.response,
+        },
+      }),
+      { maxRetries: 2, baseDelayMs: 100 }
+    );
+
+    // â”€â”€ Async memory extraction (never blocks response) â”€â”€
+    extractMemoriesFromTurn(token.id, convId, message, result.response).catch((err) => {
+      console.error('[CHAT] Memory extraction error (non-blocking):', err);
+    });
+
+    // â”€â”€ Return â”€â”€
+    return NextResponse.json({
+      response: result.response,
+      conversationId: convId,
+      meta: {
+        qualityScore: result.qualityScore,
+        retriesUsed: result.retriesUsed,
+        fallback: result.fallback || false,
+        intentResolved,
+      },
+    });
+
+  } catch (error) {
+    return handleApiError(error);
+  }
+}
+
+
+
+========== src/app/api/memories/route.ts ==========
+
+import { NextRequest, NextResponse } from 'next/server';
+import { getToken } from 'next-auth/jwt';
+import { prisma } from '@/lib/db';
+
+export async function GET(req: NextRequest) {
+  try {
+    const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
+    if (!token?.id) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const { searchParams } = new URL(req.url);
+    const conversationId = searchParams.get('conversationId');
+
+    const where: any = {
+      userId: token.id,
+      status: 'ACTIVE',
+    };
+
+    if (conversationId) {
+      where.sourceConversationId = conversationId;
+    }
+
+    const memories = await prisma.memories.findMany({
+      where,
+      orderBy: [
+        { importance: 'desc' },
+        { createdAt: 'desc' },
+      ],
+      take: 50,
+    });
+
+    return NextResponse.json({ memories });
+  } catch (error) {
+    console.error('[MEMORIES API] Error:', error);
+    return NextResponse.json({ error: 'Failed to fetch memories' }, { status: 500 });
+  }
+}
+
+========== src/app/api/notifications/unread/route.ts ==========
+
+﻿import { NextRequest, NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth/next';
+import { authOptions } from '@/lib/auth';
+import { prisma } from '@/lib/db';
+
+export const dynamic = 'force-dynamic';
+
+export async function GET(req: NextRequest) {
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
+      return NextResponse.json({ count: 0 });
+    }
+
+    const count = await prisma.notification_log.count({
+      where: {
+        userId: session.user.id,
+        readAt: null,
+      },
+    });
+
+    return NextResponse.json({ count });
+  } catch (error) {
+    console.error('Unread count error:', error);
+    return NextResponse.json({ count: 0 });
+  }
+}
+
+
+========== src/app/api/insights/patterns/route.ts ==========
+
+﻿export const dynamic = 'force-dynamic';
+
+import { NextRequest, NextResponse } from "next/server";
+import { getToken } from "next-auth/jwt";
+import { detectPatterns } from "@/lib/insights/patterns";
+import { findCrossMemoryInsights } from "@/lib/insights/cross-memory";
+
+export async function GET(req: NextRequest) {
+  try {
+    const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
+    if (!token?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+    const [patterns, crossInsights] = await Promise.all([
+      detectPatterns(token.id),
+      findCrossMemoryInsights(token.id),
+    ]);
+
+    return NextResponse.json({ patterns, crossInsights });
+  } catch (error) {
+    console.error("[INSIGHTS] Patterns error:", error);
+    return NextResponse.json({ error: "Failed to fetch insights" }, { status: 500 });
+  }
+}
+
+
+========== src/lib/auth.ts ==========
+
+﻿import { NextAuthOptions } from 'next-auth';
+import { JWT } from 'next-auth/jwt';
+import CredentialsProvider from 'next-auth/providers/credentials';
+import bcrypt from 'bcryptjs';
+import { randomUUID } from 'crypto';
+import { prisma } from './db';
+import { redis, storeSession } from './redis';
+import { logAudit } from './audit';
+import { loginSchema } from './validation';
+
+declare module 'next-auth' {
+  interface Session {
+    user: {
+      id: string;
+      email: string;
+      name?: string | null;
+      image?: string | null;
+      memoryPaused?: boolean;
+    };
+    accessToken: string;
+  }
+
+  interface User {
+    id: string;
+    email: string;
+    name?: string | null;
+    memoryPaused?: boolean;
+  }
+}
+
+declare module 'next-auth/jwt' {
+  interface JWT {
+    id: string;
+    email: string;
+    name?: string | null;
+    memoryPaused?: boolean;
+    accessToken: string;
+  }
+}
+
+export const authOptions: NextAuthOptions = {
+  trustHost: true,
+  providers: [
+    CredentialsProvider({
+      name: 'credentials',
+      credentials: {
+        email: { label: 'Email', type: 'email' },
+        password: { label: 'Password', type: 'password' },
+        deviceFingerprint: { label: 'Device Fingerprint', type: 'text' },
+        deviceName: { label: 'Device Name', type: 'text' },
+      },
+      async authorize(credentials, req) {
+        if (!credentials?.email || !credentials?.password) {
+          return null;
+        }
+
+        const result = loginSchema.safeParse({
+          email: credentials.email,
+          password: credentials.password,
+          deviceFingerprint: credentials.deviceFingerprint,
+          deviceName: credentials.deviceName,
+        });
+
+        if (!result.success) {
+          return null;
+        }
+
+        const user = await prisma.users.findUnique({
+          where: { email: credentials.email.toLowerCase() },
+          include: { devices: true },
+        });
+
+        if (!user || !user.passwordHash) {
+          return null;
+        }
+
+        const isValid = await bcrypt.compare(credentials.password, user.passwordHash);
+        if (!isValid) {
+          await logAudit({
+            userId: user.id,
+            action: 'auth.login.failed',
+            ipAddress: req?.headers?.['x-forwarded-for'] as string || req?.headers?.['x-real-ip'] as string,
+            userAgent: req?.headers?.['user-agent'] as string,
+          });
+          return null;
+        }
+
+        if (credentials.deviceFingerprint) {
+          const existingDevice = user.devices.find(
+            (d) => d.fingerprint === credentials.deviceFingerprint
+          );
+
+          if (!existingDevice) {
+            await prisma.devices.create({
+              data: {
+                userId: user.id,
+                fingerprint: credentials.deviceFingerprint,
+                name: credentials.deviceName || 'Unknown Device',
+                trusted: false,
+                lastIpAddress: req?.headers?.['x-forwarded-for'] as string || req?.headers?.['x-real-ip'] as string,
+                userAgent: req?.headers?.['user-agent'] as string,
+              },
+            });
+
+            await logAudit({
+              userId: user.id,
+              action: 'auth.device.new',
+              details: `New device detected: ${credentials.deviceName || 'Unknown'}`,
+              ipAddress: req?.headers?.['x-forwarded-for'] as string,
+              userAgent: req?.headers?.['user-agent'] as string,
+            });
+          } else {
+            await prisma.devices.update({
+              where: { id: existingDevice.id },
+              data: {
+                lastSeenAt: new Date(),
+                lastIpAddress: req?.headers?.['x-forwarded-for'] as string || req?.headers?.['x-real-ip'] as string,
+              },
+            });
+          }
+        }
+
+        await logAudit({
+          userId: user.id,
+          action: 'auth.login.success',
+          ipAddress: req?.headers?.['x-forwarded-for'] as string,
+          userAgent: req?.headers?.['user-agent'] as string,
+        });
+
+        return {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          memoryPaused: user.memoryPaused,
+        };
+      },
+    }),
+  ],
+
+  session: {
+    strategy: 'jwt',
+    maxAge: 30 * 24 * 60 * 60,
+  },
+
+  jwt: {
+    maxAge: 30 * 24 * 60 * 60,
+  },
+
+  callbacks: {
+    async jwt({ token, user, account }) {
+      if (user) {
+        token.id = user.id;
+        token.email = user.email;
+        token.name = user.name;
+        token.memoryPaused = user.memoryPaused;
+        token.accessToken = randomUUID();
+
+        const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+        try {
+          await storeSession(token.accessToken, user.id, expiresAt);
+        } catch (redisErr) {
+          console.warn('[AUTH] Redis session store failed (non-blocking):', redisErr);
+        }
+      }
+      return token;
+    },
+
+    async session({ session, token }) {
+      session.user.id = token.id;
+      session.user.email = token.email;
+      session.user.name = token.name;
+      session.user.memoryPaused = token.memoryPaused;
+      session.accessToken = token.accessToken;
+      return session;
+    },
+  },
+
+  pages: {
+    signIn: '/login',
+    signOut: '/logout',
+    error: '/login',
+    newUser: '/onboarding',
+  },
+
+  events: {
+    async signOut({ token }) {
+      if (token?.accessToken) {
+        const { revokeSession } = await import('./redis');
+        await revokeSession(token.accessToken);
+      }
+    },
+  },
+};
+
+export async function getCurrentUser(token: JWT): Promise<{ id: string; email: string; name?: string | null } | null> {
+  if (!token?.id) return null;
+
+  const user = await prisma.users.findUnique({
+    where: { id: token.id },
+    select: { id: true, email: true, name: true, memoryPaused: true },
+  });
+
+  return user;
+}
+
+
+========== src/lib/db.ts ==========
+
+import { PrismaClient } from '@prisma/client';
+
+const globalForPrisma = globalThis as unknown as {
+  prisma: PrismaClient | undefined;
+};
+
+// Connection pooling for 1000+ users
+// Neon serverless works best with connection limiting
+export const prisma = globalForPrisma.prisma ?? new PrismaClient({
+  log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
+  // Connection pool settings for scale
+  datasources: {
+    db: {
+      url: process.env.DATABASE_URL,
+    },
+  },
+});
+
+if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;
+
+// Connection health check
+export async function checkDatabaseHealth(): Promise<{ healthy: boolean; latency: number; connections: number }> {
+  const start = Date.now();
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    const latency = Date.now() - start;
+
+    // Get connection count (PostgreSQL specific)
+    const result = await prisma.$queryRaw<{ count: bigint }[]>`
+      SELECT count(*) as count FROM pg_stat_activity WHERE datname = current_database()
+    `;
+
+    return {
+      healthy: true,
+      latency,
+      connections: Number(result[0]?.count || 0),
+    };
+  } catch (error) {
+    return {
+      healthy: false,
+      latency: Date.now() - start,
+      connections: 0,
+    };
+  }
+}
+
+// Transaction helper with retry logic
+export async function withTransaction<T>(
+  fn: (tx: typeof prisma) => Promise<T>,
+  maxRetries = 3
+): Promise<T> {
+  let lastError: Error | undefined;
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      return await prisma.$transaction(async (tx) => {
+        return fn(tx as unknown as typeof prisma);
+      }, {
+        maxWait: 5000,
+        timeout: 10000,
+      });
+    } catch (error) {
+      lastError = error as Error;
+      if (attempt < maxRetries) {
+        await new Promise(r => setTimeout(r, attempt * 100));
+      }
+    }
+  }
+
+  throw lastError;
+}
+
+// Paginated query helper for large datasets
+export async function paginatedQuery<T>({
+  query,
+  page = 1,
+  pageSize = 20,
+}: {
+  query: () => Promise<T[]>;
+  page?: number;
+  pageSize?: number;
+}): Promise<{ data: T[]; pagination: { page: number; pageSize: number; total: number; totalPages: number } }> {
+  const data = await query();
+  // Note: In production, use a separate count query
+  return {
+    data,
+    pagination: {
+      page,
+      pageSize,
+      total: data.length,
+      totalPages: Math.ceil(data.length / pageSize),
+    },
+  };
+}
+
+
+========== src/lib/redis.ts ==========
+
+﻿import { Redis } from 'ioredis';
+
+const globalForRedis = globalThis as unknown as {
+  redis: Redis | undefined;
+};
+
+function createRedisClient(): Redis {
+  const url = process.env.REDIS_URL;
+
+  if (!url) {
+    console.warn('REDIS_URL not set, using default localhost:6379');
+    return new Redis({
+      host: 'localhost',
+      port: 6379,
+      
+      retryStrategy: (times) => Math.min(times * 50, 2000),
+      maxRetriesPerRequest: 3,
+      
+    });
+  }
+
+  if (url.startsWith('rediss://') || url.startsWith('redis://')) {
+    return new Redis(url, {
+      
+      retryStrategy: (times) => Math.min(times * 50, 2000),
+      maxRetriesPerRequest: 3,
+      
+      keepAlive: 30000,
+    });
+  }
+
+  const [host, port] = url.split(':');
+  return new Redis({
+    host: host || 'localhost',
+    port: parseInt(port || '6379'),
+    
+    retryStrategy: (times) => Math.min(times * 50, 2000),
+    maxRetriesPerRequest: 3,
+    
+  });
+}
+
+export const redis = globalForRedis.redis ?? createRedisClient();
+
+// ALWAYS cache the connection, even in production (serverless needs singleton)
+globalForRedis.redis = redis;
+
+redis.on('error', (err) => {
+  console.error('[REDIS] Connection error:', err.message);
+});
+
+// Redis key helpers - all scoped by user_id for sharding alignment
+export const redisKeys = {
+  session: (token: string) => `session:${token}`,
+  userSessions: (userId: string) => `user:${userId}:sessions`,
+  deviceTrust: (deviceId: string) => `device:${deviceId}:trust`,
+  rateLimit: (key: string) => `ratelimit:${key}`,
+  userContext: (userId: string) => `context:${userId}`,
+  conversationContext: (conversationId: string) => `conv:${conversationId}:context`,
+  notificationBudget: (userId: string) => `notify:${userId}:budget`,
+  exportJob: (jobId: string) => `export:${jobId}`,
+  cache: (key: string) => `cache:${key}`,
+  metrics: (metric: string) => `metrics:${metric}`,
+  health: (service: string) => `health:${service}`,
+  jobQueue: (queue: string) => `queue:${queue}`,
+  userRateLimit: (userId: string, action: string) => `ratelimit:${userId}:${action}`,
+};
+
+export async function storeSession(token: string, userId: string, expiresAt: Date): Promise<void> {
+  const ttl = Math.floor((expiresAt.getTime() - Date.now()) / 1000);
+  await redis.setex(redisKeys.session(token), ttl, JSON.stringify({ userId, expiresAt: expiresAt.toISOString() }));
+  await redis.sadd(redisKeys.userSessions(userId), token);
+}
+
+export async function getSession(token: string): Promise<{ userId: string; expiresAt: string } | null> {
+  const data = await redis.get(redisKeys.session(token));
+  if (!data) return null;
+  return JSON.parse(data);
+}
+
+export async function revokeSession(token: string): Promise<void> {
+  const session = await getSession(token);
+  if (session) {
+    await redis.del(redisKeys.session(token));
+    await redis.srem(redisKeys.userSessions(session.userId), token);
+  }
+}
+
+export async function revokeAllUserSessions(userId: string): Promise<void> {
+  const tokens = await redis.smembers(redisKeys.userSessions(userId));
+  if (tokens.length > 0) {
+    const pipeline = redis.pipeline();
+    tokens.forEach((token) => pipeline.del(redisKeys.session(token)));
+    pipeline.del(redisKeys.userSessions(userId));
+    await pipeline.exec();
+  }
+}
+
+export async function checkRedisHealth(): Promise<{ healthy: boolean; latency: number }> {
+  const start = Date.now();
+  try {
+    await redis.ping();
+    return { healthy: true, latency: Date.now() - start };
+  } catch {
+    return { healthy: false, latency: Date.now() - start };
+  }
+}
+
+
+========== src/lib/audit.ts ==========
+
+import { prisma } from './db';
+
+export async function logAudit(params: {
+  userId?: string;
+  action: string;
+  resource?: string;
+  details?: string;
+  ipAddress?: string;
+  userAgent?: string;
+}): Promise<void> {
+  try {
+    await prisma.audit_log.create({
+      data: {
+        userId: params.userId,
+        action: params.action,
+        resource: params.resource,
+        details: params.details,
+        ipAddress: params.ipAddress,
+        userAgent: params.userAgent,
+      },
+    });
+  } catch (error) {
+    console.error('Audit log failed:', error);
+  }
+}
+
+
+========== src/lib/validation.ts ==========
+
+import { z } from 'zod';
+
+export const loginSchema = z.object({
+  email: z.string().email('Please enter a valid email address'),
+  password: z.string().min(8, 'Password must be at least 8 characters'),
+  deviceFingerprint: z.string().optional(),
+  deviceName: z.string().optional(),
+});
+
+export const registerSchema = z.object({
+  name: z.string().min(1, 'Name is required').max(100),
+  email: z.string().email('Please enter a valid email address'),
+  password: z.string().min(8, 'Password must be at least 8 characters'),
+  consentGiven: z.boolean().refine((val) => val === true, {
+    message: 'You must agree to the privacy policy',
+  }),
+});
+
+export const memoryEditSchema = z.object({
+  statement: z.string().min(1, 'Memory content is required').max(2000),
+});
+
+export const goalSchema = z.object({
+  title: z.string().min(1, 'Title is required').max(200),
+  description: z.string().max(2000).optional(),
+  category: z.string(),
+  targetDate: z.string().datetime().optional(),
+});
+
+export const privacySettingsSchema = z.object({
+  memoryPaused: z.boolean(),
+  dataRetentionDays: z.number().min(1).max(3650),
+  disabledCategories: z.array(z.string()).optional(),
+});
+
+export type LoginInput = z.infer<typeof loginSchema>;
+export type RegisterInput = z.infer<typeof registerSchema>;
+export type MemoryEditInput = z.infer<typeof memoryEditSchema>;
+export type GoalInput = z.infer<typeof goalSchema>;
+export type PrivacySettingsInput = z.infer<typeof privacySettingsSchema>;
+
+
+========== src/middleware.ts ==========
+
+﻿import { NextResponse, NextRequest } from 'next/server';
+import { getToken } from 'next-auth/jwt';
+
+export async function middleware(req: NextRequest) {
+  const pathname = req.nextUrl.pathname;
+  const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
+
+  // Allow all API routes to handle their own auth
+  if (pathname.startsWith('/api/')) {
+    return NextResponse.next();
+  }
+
+  // Redirect authenticated users away from auth pages
+  if (token && (pathname === '/login' || pathname === '/register')) {
+    return NextResponse.redirect(new URL('/chat', req.url));
+  }
+
+  // Redirect unauthenticated users to login
+  if (!token && pathname !== '/login' && pathname !== '/register') {
+    return NextResponse.redirect(new URL('/login', req.url));
+  }
+
+  return NextResponse.next();
+}
+
+export const config = {
+  matcher: ['/((?!_next/static|_next/image|favicon.ico|public|robots.txt).*)'],
+};
+
+
+========== src/components/auth/login-form.tsx ==========
+
+'use client';
+
+import { useState } from 'react';
+import { signIn } from 'next-auth/react';
+import { useRouter } from 'next/navigation';
+import Link from 'next/link';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Eye, EyeOff, Loader2 } from 'lucide-react';
+
+export function LoginForm() {
+  const router = useRouter();
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setIsLoading(true);
+    setError('');
+
+    try {
+      const deviceFingerprint = btoa(navigator.userAgent + navigator.language + screen.width + screen.height);
+
+      const result = await signIn('credentials', {
+        email,
+        password,
+        deviceFingerprint,
+        deviceName: navigator.platform,
+        redirect: false,
+      });
+
+      if (result?.error) {
+        setError('Invalid email or password');
+      } else {
+        router.push('/');
+        router.refresh();
+      }
+    } catch {
+      setError('Something went wrong. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  return (
+    <Card className="border-parchment-700/50">
+      <CardHeader className="space-y-1 text-center">
+        <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-indigo-500">
+          <span className="text-xl font-serif text-parchment-100">l</span>
+        </div>
+        <CardTitle className="text-2xl font-serif text-indigo-500">Welcome back</CardTitle>
+        <CardDescription>Sign in to continue your journey with lurisa</CardDescription>
+      </CardHeader>
+      <form onSubmit={handleSubmit}>
+        <CardContent className="space-y-4">
+          {error && (
+            <div className="rounded-md bg-error/10 p-3 text-sm text-error">
+              {error}
+            </div>
+          )}
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-charcoal-700" htmlFor="email">Email</label>
+            <Input
+              id="email"
+              type="email"
+              placeholder="you@example.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              className="bg-parchment-100"
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-charcoal-700" htmlFor="password">Password</label>
+            <div className="relative">
+              <Input
+                id="password"
+                type={showPassword ? 'text' : 'password'}
+                placeholder="Enter your password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                className="bg-parchment-100 pr-10"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-charcoal-300 hover:text-charcoal-500"
+              >
+                {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
+            </div>
+          </div>
+        </CardContent>
+        <CardFooter className="flex flex-col space-y-4">
+          <Button type="submit" className="w-full" disabled={isLoading}>
+            {isLoading ? (
+              <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Signing in...</>
+            ) : 'Sign In'}
+          </Button>
+          <p className="text-sm text-charcoal-500 text-center">
+            Don&apos;t have an account?{' '}
+            <Link href="/register" className="text-indigo-500 hover:underline">Create one</Link>
+          </p>
+        </CardFooter>
+      </form>
+    </Card>
+  );
+}
+
+
+========== src/components/dashboard/dashboard-shell.tsx ==========
+
+﻿'use client';
+
+import { useState, useEffect } from 'react';
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
+import { signOut } from 'next-auth/react';
+import { MessageCircle, Brain, Target, Clock, Settings, LogOut, Menu, X, Moon, Sun, Bell, Lightbulb } from 'lucide-react';
+import { Avatar } from '@/components/ui/avatar';
+import { useTheme } from 'next-themes';
+
+interface DashboardShellProps {
+  user: { id: string; email: string; name?: string | null; image?: string | null };
+  children: React.ReactNode;
+}
+
+const navigation = [
+  { name: 'Chat', href: '/chat', icon: MessageCircle },
+  { name: 'Memories', href: '/memories', icon: Brain },
+  { name: 'Insights', href: '/insights', icon: Lightbulb },
+  { name: 'Goals', href: '/goals', icon: Target },
+  { name: 'Timeline', href: '/timeline', icon: Clock },
+  { name: 'Notifications', href: '/notifications', icon: Bell },
+  { name: 'Settings', href: '/settings', icon: Settings },
+];
+
+export function DashboardShell({ user, children }: DashboardShellProps) {
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const pathname = usePathname();
+  const { theme, setTheme } = useTheme();
+
+  useEffect(() => {
+    fetch('/api/notifications/unread')
+      .then(r => r.ok ? r.json() : { count: 0 })
+      .then(data => setUnreadCount(data.count || 0))
+      .catch(() => setUnreadCount(0));
+  }, []);
+
+  return (
+    <div className="min-h-[100dvh] bg-parchment-300 dark:bg-parchment-900">
+      {sidebarOpen && (
+        <div className="fixed inset-0 bg-charcoal-900/50 z-40 lg:hidden" onClick={() => setSidebarOpen(false)} />
+      )}
+
+      <aside className={`fixed top-0 left-0 z-50 h-full w-64 bg-parchment-100 dark:bg-indigo-900 border-r border-parchment-700/30 dark:border-parchment-700/10 transform transition-transform duration-200 ease-in-out ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
+        <div className="flex flex-col h-full">
+          <div className="flex items-center justify-between h-16 px-6 border-b border-parchment-700/20 dark:border-indigo-800/30">
+            <Link href="/" className="flex items-center space-x-2">
+              <div className="h-8 w-8 rounded-full bg-indigo-500 flex items-center justify-center">
+                <span className="text-parchment-100 font-serif text-lg">l</span>
+              </div>
+              <span className="text-xl font-serif text-indigo-500 dark:text-indigo-300">lurisa</span>
+            </Link>
+            <button onClick={() => setSidebarOpen(false)} className="lg:hidden text-charcoal-500">
+              <X size={20} />
+            </button>
+          </div>
+
+          <nav className="flex-1 px-4 py-6 space-y-1">
+            {navigation.map((item) => {
+              const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
+              const isNotifications = item.name === 'Notifications';
+              return (
+                <Link
+                  key={item.name}
+                  href={item.href}
+                  onClick={() => setSidebarOpen(false)}
+                  className={`flex items-center justify-between px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${isActive ? 'bg-indigo-500 text-parchment-100' : 'text-charcoal-500 hover:bg-parchment-500 hover:text-charcoal-700 dark:text-parchment-300 dark:hover:bg-indigo-800'}`}
+                >
+                  <div className="flex items-center space-x-3">
+                    <item.icon size={18} />
+                    <span>{item.name}</span>
+                  </div>
+                  {isNotifications && unreadCount > 0 && (
+                    <span className="inline-flex items-center justify-center h-5 min-w-[1.25rem] px-1.5 rounded-full bg-terracotta-500 text-parchment-100 text-xs font-bold">
+                      {unreadCount > 99 ? '99+' : unreadCount}
+                    </span>
+                  )}
+                </Link>
+              );
+            })}
+          </nav>
+
+          <div className="p-4 border-t border-parchment-700/20 dark:border-indigo-800/30 space-y-3">
+            <button
+              onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+              className="flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm text-charcoal-500 hover:bg-parchment-500 w-full transition-colors dark:text-parchment-300 dark:hover:bg-indigo-800"
+            >
+              {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+              <span>{theme === 'dark' ? 'Light mode' : 'Dark mode'}</span>
+            </button>
+
+            <div className="flex items-center space-x-3 px-3 py-2">
+              <Avatar src={user.image} fallback={user.name || user.email} size="sm" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-charcoal-700 dark:text-parchment-100 truncate">{user.name || 'User'}</p>
+                <p className="text-xs text-charcoal-300 dark:text-charcoal-100 truncate">{user.email}</p>
+              </div>
+            </div>
+
+            <button
+              onClick={async () => { await signOut({ redirect: false }); window.location.href = '/login'; }}
+              className="flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm text-charcoal-500 hover:bg-error/10 hover:text-error dark:text-parchment-300 w-full transition-colors"
+            >
+              <LogOut size={18} />
+              <span>Sign out</span>
+            </button>
+          </div>
+        </div>
+      </aside>
+
+      <div className="lg:ml-64">
+        <header className="fixed top-0 left-0 right-0 z-30 lg:hidden h-16 flex items-center justify-between px-4 border-b border-parchment-700/20 dark:border-indigo-800/30 bg-parchment-100 dark:bg-indigo-900">
+          <button onClick={() => setSidebarOpen(true)} className="text-charcoal-500 dark:text-parchment-300">
+            <Menu size={24} />
+          </button>
+          <div className="flex items-center space-x-2">
+            <div className="h-7 w-7 rounded-full bg-indigo-500 flex items-center justify-center">
+              <span className="text-parchment-100 font-serif text-sm">l</span>
+            </div>
+            <span className="font-serif text-indigo-500 dark:text-indigo-300">lurisa</span>
+          </div>
+          <div className="w-8" />
+        </header>
+
+        <main className="pt-16 lg:pt-0 p-4 sm:p-6 lg:p-8 relative">
+          {children}
+        </main>
+      </div>
+    </div>
+  );
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+========== src/components/dashboard/insights-dashboard.tsx ==========
+
+﻿"use client";
+
+import { useState, useEffect } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Lightbulb, GitBranch, TrendingUp } from "lucide-react";
+
+interface Pattern {
+  pattern: string;
+  frequency: number;
+  category: string;
+  confidence: number;
+  examples: string[];
+  suggestion: string;
+}
+
+interface CrossInsight {
+  type: string;
+  description: string;
+  memoryIds?: string[];
+  confidence: number;
+}
+
+export function InsightsDashboard() {
+  const [patterns, setPatterns] = useState<Pattern[]>([]);
+  const [crossInsights, setCrossInsights] = useState<CrossInsight[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchInsights();
+  }, []);
+
+  async function fetchInsights() {
+    try {
+      const res = await fetch("/api/insights/patterns");
+      if (res.ok) {
+        const data = await res.json();
+        setPatterns(data.patterns || []);
+        setCrossInsights(data.crossInsights || []);
+      }
+    } catch (error) {
+      console.error("Failed to fetch insights:", error);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <Skeleton className="h-8 w-48" />
+        <Skeleton className="h-48 w-full" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6 animate-fade-in">
+      <div>
+        <h1 className="text-2xl font-serif text-indigo-500 dark:text-indigo-300">Insights</h1>
+        <p className="text-charcoal-500 dark:text-parchment-300 mt-1">Patterns and connections lurisa has noticed</p>
+      </div>
+
+      {patterns.length === 0 && crossInsights.length === 0 && (
+        <Card className="border-parchment-700/30">
+          <CardContent className="py-12 text-center">
+            <Lightbulb className="mx-auto h-8 w-8 text-charcoal-300 mb-3" />
+            <p className="text-charcoal-500">Not enough data yet. Keep chatting and insights will appear here.</p>
+          </CardContent>
+        </Card>
+      )}
+
+      {patterns.length > 0 && (
+        <div className="space-y-4">
+          <h2 className="text-lg font-medium text-charcoal-700 dark:text-parchment-100 flex items-center">
+            <TrendingUp className="mr-2 h-5 w-5 text-indigo-500" />
+            Detected Patterns
+          </h2>
+          <div className="grid gap-4">
+            {patterns.map((p, i) => (
+              <Card key={i} className="border-parchment-700/30">
+                <CardHeader className="pb-3">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-base font-medium text-charcoal-700 dark:text-parchment-100">
+                      {p.pattern}
+                    </CardTitle>
+                    <Badge variant="secondary" className="text-xs">{p.frequency}x</Badge>
+                  </div>
+                </CardHeader>
+                <CardContent className="pt-0">
+                  <p className="text-sm text-charcoal-500 dark:text-parchment-300 mb-3">{p.suggestion}</p>
+                  {p.examples && p.examples.length > 0 && (
+                    <div className="space-y-1">
+                      {p.examples.map((ex, j) => (
+                        <p key={j} className="text-xs text-charcoal-400 dark:text-charcoal-100 italic">"{ex}"</p>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {crossInsights.length > 0 && (
+        <div className="space-y-4">
+          <h2 className="text-lg font-medium text-charcoal-700 dark:text-parchment-100 flex items-center">
+            <GitBranch className="mr-2 h-5 w-5 text-indigo-500" />
+            Cross-Memory Connections
+          </h2>
+          <div className="grid gap-4">
+            {crossInsights.map((c, i) => (
+              <Card key={i} className="border-parchment-700/30">
+                <CardContent className="py-4">
+                  <p className="text-sm text-charcoal-700 dark:text-parchment-100">{c.description}</p>
+                  <p className="text-xs text-charcoal-400 mt-1">Confidence: {Math.round(c.confidence * 100)}%</p>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+
+
+========== src/components/dashboard/insights-page.tsx ==========
+
+﻿"use client";
+
+export function InsightsPage() {
+  return (
+    <div className="space-y-6">
+      <h1 className="text-2xl font-semibold text-[#2E2E2E]">Insights</h1>
+      <p className="text-[#5C5B57]">
+        Patterns and suggestions based on your memories will appear here.
+      </p>
+      <div className="rounded-lg border border-[#D8D0BF] bg-[#FFFDF9] p-8 text-center">
+        <p className="text-[#9B9A96]">No insights yet — keep chatting with lurisa.</p>
+      </div>
+    </div>
+  );
+}
+
+export default InsightsPage;
+
+
+========== src/components/chat/chat-interface.tsx ==========
+
+﻿'use client';
+
+import { useState, useRef, useEffect } from 'react';
+
+function generateId(): string {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return generateId();
+  }
+  return Date.now() + '-' + Math.random().toString(36).slice(2, 11);
+}
+import { ChatMessageList } from './message-list';
+import { ChatInput } from './chat-input';
+import { TypingIndicator } from './typing-indicator';
+
+interface Message {
+  id: string;
+  role: 'USER' | 'ASSISTANT';
+  content: string;
+  createdAt: string;
+}
+
+interface ChatInterfaceProps {
+  userId?: string;
+}
+
+const SUGGESTIONS = [
+  "What's been on your mind recently?",
+  "Tell me about something you're looking forward to.",
+  "What made today meaningful?",
+  "How are you feeling right now?",
+];
+
+export function ChatInterface({ userId }: ChatInterfaceProps) {
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [isTyping, setIsTyping] = useState(false);
+  const [conversationId, setConversationId] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [mounted, setMounted] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const chatContainerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (window.innerWidth >= 1024) return;
+
+    const el = chatContainerRef.current;
+    if (!el) return;
+
+    const html = document.documentElement;
+    const body = document.body;
+    const origHtml = html.style.overflow;
+    const origBody = body.style.overflow;
+
+    html.style.overflow = 'hidden';
+    body.style.overflow = 'hidden';
+
+    const resize = () => {
+      const vv = window.visualViewport;
+      const h = vv ? vv.height : window.innerHeight;
+      el.style.height = `${Math.max(h - 64, 0)}px`;
+      window.scrollTo(0, 0);
+    };
+
+    const preventScroll = (e: TouchEvent) => {
+      const target = e.target as HTMLElement;
+      if (target.closest('[data-scroll-area]')) return;
+      e.preventDefault();
+    };
+
+    resize();
+    window.visualViewport?.addEventListener('resize', resize);
+    window.visualViewport?.addEventListener('scroll', resize);
+    document.addEventListener('touchmove', preventScroll, { passive: false });
+
+    return () => {
+      window.visualViewport?.removeEventListener('resize', resize);
+      window.visualViewport?.removeEventListener('scroll', resize);
+      document.removeEventListener('touchmove', preventScroll);
+      html.style.overflow = origHtml;
+      body.style.overflow = origBody;
+      el.style.height = '';
+    };
+  }, []);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages, isTyping]);
+
+  useEffect(() => {
+    let active = true;
+
+    async function init() {
+      try {
+        const savedId = localStorage.getItem('lurisa-conversation-id');
+        if (savedId) {
+          const res = await fetch(`/api/conversations/${savedId}`);
+          const data = await res.json();
+          if (!active) return;
+
+          if (data.conversation?.messages?.length) {
+            setConversationId(savedId);
+            setMessages(data.conversation.messages.map((m: any) => ({
+              id: m.id,
+              role: m.role.toUpperCase() as 'USER' | 'ASSISTANT',
+              content: m.content,
+              createdAt: m.createdAt,
+            })));
+          } else {
+            localStorage.removeItem('lurisa-conversation-id');
+          }
+        }
+      } catch (err) {
+        console.error('Failed to load conversation:', err);
+      } finally {
+        if (active) setIsLoading(false);
+      }
+    }
+
+    init();
+    return () => { active = false; };
+  }, []);
+
+  // Proactive conversation starter polling
+  useEffect(() => {
+    let active = true;
+
+    async function checkProactive() {
+      try {
+        const res = await fetch('/api/chat/proactive');
+        const data = await res.json();
+        if (!active || !data.message) return;
+
+        setMessages((prev) => {
+          if (prev.some((m) => m.id === data.message.id)) return prev;
+          return [...prev, data.message];
+        });
+
+        setConversationId((prev) => {
+          if (prev) return prev;
+          if (data.conversationId) {
+            localStorage.setItem('lurisa-conversation-id', data.conversationId);
+            return data.conversationId;
+          }
+          return prev;
+        });
+      } catch (err) {
+        // Silent fail
+      }
+    }
+
+    checkProactive();
+    const interval = setInterval(checkProactive, 5 * 60 * 1000);
+
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
+  }, []);
+
+  async function sendMessage(content: string) {
+    const userMessage: Message = {
+      id: generateId(),
+      role: 'USER',
+      content,
+      createdAt: new Date().toISOString(),
+    };
+
+    setMessages((prev) => [...prev, userMessage]);
+    setIsTyping(true);
+
+    try {
+      const history = messages.slice(-10).map((m) => ({
+        role: m.role.toLowerCase() as 'user' | 'assistant',
+        content: m.content,
+      }));
+
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: content,
+          conversationId,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (data.error) {
+        throw new Error(data.error.message || 'Failed to get response');
+      }
+
+      if (data.conversationId && !conversationId) {
+        setConversationId(data.conversationId);
+        localStorage.setItem('lurisa-conversation-id', data.conversationId);
+      }
+
+      const assistantMessage: Message = {
+        id: generateId(),
+        role: 'ASSISTANT',
+        content: data.response,
+        createdAt: new Date().toISOString(),
+      };
+
+      setMessages((prev) => [...prev, assistantMessage]);
+    } catch (error) {
+      const errorMessage: Message = {
+        id: generateId(),
+        role: 'ASSISTANT',
+        content: "I'm having a little trouble right now. Could you try again in a moment?",
+        createdAt: new Date().toISOString(),
+      };
+      setMessages((prev) => [...prev, errorMessage]);
+    } finally {
+      setIsTyping(false);
+    }
+  }
+
+  function onSuggestion(suggestion: string) {
+    sendMessage(suggestion);
+  }
+
+  // Prevent hydration mismatch: render nothing until client mount
+  if (!mounted) {
+    return (
+    <div ref={chatContainerRef} className="flex flex-col h-full max-w-3xl mx-auto">
+        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 py-6 space-y-6">
+          <div className="flex items-center justify-center py-8">
+            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-500"></div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col h-full max-w-3xl mx-auto">
+      <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 py-6 space-y-6">
+        {isLoading && (
+          <div className="flex items-center justify-center py-8">
+            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-500"></div>
+          </div>
+        )}
+
+        {messages.length === 0 && !isLoading && (
+          <div className="space-y-4">
+            <div className="text-center space-y-2 py-8">
+              <h2 className="text-xl font-serif text-indigo-500 dark:text-indigo-300">
+                Good to see you
+              </h2>
+              <p className="text-charcoal-500 dark:text-parchment-300 text-sm">
+                lurisa remembers what matters. Start a conversation.
+              </p>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {SUGGESTIONS.map((suggestion) => (
+                <button
+                  key={suggestion}
+                  onClick={() => onSuggestion(suggestion)}
+                  tabIndex={-1}
+                  className="text-left px-4 py-3 rounded-lg border border-parchment-700/30 bg-parchment-100 hover:bg-parchment-500 hover:border-parchment-700 transition-colors text-sm text-charcoal-500 dark:text-parchment-300"
+                >
+                  {suggestion}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <ChatMessageList messages={messages} />
+        {isTyping && <TypingIndicator />}
+        <div ref={messagesEndRef} />
+      </div>
+
+      <div className="flex-shrink-0 border-t border-parchment-700/30 bg-parchment-100/50 dark:bg-indigo-900/50 px-4 pt-4 pb-6">
+        <ChatInput onSend={sendMessage} disabled={isTyping || isLoading} />
+      </div>
+    </div>
+  );
+}
+
+
+
+========== src/components/chat/chat-input.tsx ==========
+
+'use client';
+
+import { useState, useEffect } from 'react';
+import { Send, Loader2 } from 'lucide-react';
+import { VoiceInput } from './voice-input';
+
+interface ChatInputProps {
+  onSend: (message: string) => void;
+  disabled?: boolean;
+  placeholder?: string;
+}
+
+export function ChatInput({ onSend, disabled, placeholder }: ChatInputProps) {
+  const [input, setInput] = useState('');
+
+  // Auto-resize textarea
+  useEffect(() => {
+    const el = document.getElementById('lurisa-chat-input') as HTMLTextAreaElement | null;
+    if (el) {
+      el.style.height = 'auto';
+      el.style.height = `${Math.min(el.scrollHeight, 200)}px`;
+    }
+  }, [input]);
+
+  function handleSubmit() {
+    const trimmed = input.trim();
+    if (!trimmed || disabled) return;
+    onSend(trimmed);
+    setInput('');
+    const el = document.getElementById('lurisa-chat-input') as HTMLTextAreaElement | null;
+    if (el) el.style.height = 'auto';
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSubmit();
+    }
+  }
+
+  return (
+    <div className="flex items-end space-x-3">
+      <div className="flex-1 relative">
+        <textarea
+          id="lurisa-chat-input"
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={handleKeyDown}
+          placeholder={disabled ? 'Loading...' : (placeholder || 'Type a message...')}
+          readOnly={disabled}
+          rows={1}
+          className={`w-full min-h-[48px] max-h-[200px] resize-none rounded-md border border-input bg-parchment-100 dark:bg-indigo-900 px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 pr-12 ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+          style={{ lineHeight: '1.5' }}
+        />
+        <span className="absolute right-3 bottom-3 text-xs text-charcoal-300 hidden sm:block">
+          {input.length > 0 && `${input.length} chars`}
+        </span>
+      </div>
+      {input.trim() ? (
+        <button
+          onClick={handleSubmit}
+          disabled={disabled || !input.trim()}
+          className="h-12 w-12 shrink-0 inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90"
+        >
+          {disabled ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}
+        </button>
+      ) : (
+        <VoiceInput onTranscription={onSend} disabled={disabled} />
+      )}
+    </div>
+  );
+}
+
+
+========== src/components/chat/message-list.tsx ==========
+
+﻿import { cn } from '@/lib/utils';
+
+interface Message {
+  id: string;
+  role: 'USER' | 'ASSISTANT';
+  content: string;
+  createdAt: string;
+}
+
+interface ChatMessageListProps {
+  messages: Message[];
+}
+
+export function ChatMessageList({ messages }: ChatMessageListProps) {
+  return (
+    <div className="space-y-6">
+      {messages.map((message) => (
+        <ChatMessage
+          key={message.id}
+          message={message}
+        />
+      ))}
+    </div>
+  );
+}
+
+function ChatMessage({ message }: { message: Message }) {
+  const isUser = message.role === 'USER';
+
+  return (
+    <div className={cn(
+      'flex w-full',
+      isUser ? 'justify-end' : 'justify-start'
+    )}>
+      <div className="max-w-[85%] sm:max-w-[75%]">
+        <div className={cn(
+          'rounded-2xl px-4 py-3 text-sm leading-relaxed',
+          isUser
+            ? 'bg-sage-500 text-parchment-100 rounded-tr-sm'
+            : 'bg-parchment-100 border border-parchment-700/30 text-charcoal-700 dark:bg-indigo-900 dark:text-parchment-100 dark:border-parchment-700/10 rounded-tl-sm'
+        )}>
+          <MessageContent content={message.content} />
+          <span className={cn(
+            'text-xs mt-2 block',
+            isUser ? 'text-sage-100' : 'text-charcoal-300'
+          )}>
+            {new Date(message.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MessageContent({ content }: { content: string }) {
+  const lines = content.split('\n');
+
+  return (
+    <div className="space-y-2">
+      {lines.map((line, i) => {
+        if (line.startsWith('**') && line.endsWith('**')) {
+          return <p key={i} className="font-semibold">{line.replace(/\*\*/g, '')}</p>;
+        }
+        if (line.startsWith('- ')) {
+          return <p key={i} className="pl-4">{'\u2022'} {line.slice(2)}</p>;
+        }
+        if (line.trim() === '') {
+          return <div key={i} className="h-2" />;
+        }
+        return <p key={i}>{line}</p>;
+      })}
+    </div>
+  );
+}
+
+========== src/components/providers.tsx ==========
+
+'use client';
+import { SessionProvider } from 'next-auth/react';
+import { ThemeProvider } from 'next-themes';
+
+export function Providers({ children }: { children: React.ReactNode }) {
+  return (
+    <SessionProvider>
+      <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+        {children}
+      </ThemeProvider>
+    </SessionProvider>
+  );
+}
+
+========== src/app/layout.tsx ==========
+
+﻿import type { Metadata, Viewport } from 'next';
+import { Inter, Source_Serif_4 } from 'next/font/google';
+import './globals.css';
+import { Providers } from '@/components/providers';
+import { ServiceWorkerRegister } from '@/components/pwa/service-worker-register';
+
+const inter = Inter({ subsets: ['latin'], variable: '--font-inter', display: 'swap' });
+const sourceSerif = Source_Serif_4({ subsets: ['latin'], variable: '--font-source-serif', display: 'swap', weight: ['400', '600'] });
+
+export const metadata: Metadata = {
+  manifest: '/manifest.json',
+  title: 'lurisa \u2014 Your Living Intelligence',
+  description: 'A memory-first personal intelligence that grows with you.',
+};
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+  viewportFit: 'cover',
+};
+
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <html lang="en" suppressHydrationWarning>
+      <body className={`${inter.variable} ${sourceSerif.variable} font-sans antialiased`}>
+        <Providers>{children}</Providers>
+        <ServiceWorkerRegister />
+      </body>
+    </html>
+  );
+}
+
+
+
+========== public/sw.js ==========
+
+const CACHE_NAME = "lurisa-v1";
+const STATIC_ASSETS = ["/","/chat","/memories","/goals","/timeline","/manifest.json"];
+
+self.addEventListener("install", (event) => {
+  event.waitUntil(
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(STATIC_ASSETS))
+  );
+  self.skipWaiting();
+});
+
+self.addEventListener("activate", (event) => {
+  event.waitUntil(
+    caches.keys().then((keys) =>
+      Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k)))
+    )
+  );
+  self.clients.claim();
+});
+
+self.addEventListener("fetch", (event) => {
+  const { request } = event;
+  const url = new URL(request.url);
+
+  // Never intercept API calls
+  if (url.pathname.startsWith("/api/")) return;
+  // Never intercept Next.js internal chunks/assets
+  if (url.pathname.startsWith("/_next/")) return;
+  // Only handle GET requests
+  if (request.method !== "GET") return;
+
+  // Stale-while-revalidate for app pages
+  if (["/memories","/goals","/timeline"].includes(url.pathname)) {
+    event.respondWith(
+      caches.match(request).then((cached) => {
+        const fetchPromise = fetch(request).then((res) => {
+          if (res.ok) {
+            const clone = res.clone();
+            caches.open(CACHE_NAME).then((c) => c.put(request, clone));
+          }
+          return res;
+        });
+        return cached || fetchPromise;
+      })
+    );
+    return;
+  }
+
+  // Cache-first for everything else (but not _next/*)
+  event.respondWith(
+    caches.match(request).then((cached) => {
+      return (
+        cached ||
+        fetch(request).then((res) => {
+          if (res.ok) {
+            const clone = res.clone();
+            caches.open(CACHE_NAME).then((c) => c.put(request, clone));
+          }
+          return res;
+        })
+      );
+    })
+  );
+});
+
+self.addEventListener("push", (event) => {
+  if (!event.data) return;
+  const data = event.data.json();
+  event.waitUntil(
+    self.registration.showNotification(data.title || "lurisa", {
+      body: data.body || "",
+      icon: "/icon-192x192.png",
+      badge: "/icon-192x192.png",
+      tag: data.tag || "default",
+      requireInteraction: data.requireInteraction || false,
+      data: data.url ? { url: data.url } : undefined,
+    })
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const url = event.notification.data?.url || "/chat";
+  event.waitUntil(self.clients.openWindow(url));
+});
+
+========== next.config.js ==========
+
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+  experimental: {
+    serverActions: {
+      bodySizeLimit: '2mb',
+    },
+  },
+  images: {
+    domains: ['localhost'],
+    minimumCacheTTL: 60,
+  },
+  compress: true,
+  poweredByHeader: false,
+  generateEtags: true,
+
+  // Vercel Cron Jobs for Follow-Up Engine + Daily Rhythm
+  async rewrites() {
+    return [];
+  },
+
+  async headers() {
+    const csp = [
+      "default-src 'self'",
+      "script-src 'self' 'unsafe-eval' 'unsafe-inline'",
+      "style-src 'self' 'unsafe-inline'",
+      "img-src 'self' blob: data:",
+      "font-src 'self'",
+      "connect-src 'self'",
+      "frame-ancestors 'none'",
+      "base-uri 'self'",
+      "form-action 'self'",
+    ].join('; ');
+
+    return [
+      {
+        source: '/:path*',
+        headers: [
+          { key: 'X-DNS-Prefetch-Control', value: 'on' },
+          { key: 'X-Frame-Options', value: 'DENY' },
+          { key: 'X-Content-Type-Options', value: 'nosniff' },
+          { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+          { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
+          { key: 'Content-Security-Policy', value: csp },
+          { key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains; preload' },
+        ],
+      },
+      {
+        source: '/api/:path*',
+        headers: [
+          { key: 'Access-Control-Allow-Credentials', value: 'true' },
+          { key: 'Access-Control-Allow-Origin', value: process.env.APP_URL || 'http://localhost:3000' },
+          { key: 'Access-Control-Allow-Methods', value: 'GET,DELETE,PATCH,POST,PUT,OPTIONS' },
+          { key: 'Access-Control-Allow-Headers', value: 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization' },
+          { key: 'Cache-Control', value: 'no-store, no-cache, must-revalidate, proxy-revalidate' },
+        ],
+      },
+    ];
+  },
+};
+
+module.exports = nextConfig;
+
+
+========== package.json ==========
+
+{
+    "name": "lurisa",
+    "version": "1.5.0",
+    "private": true,
+    "scripts": {
+        "dev": "next dev",
+        "build": "prisma generate && next build",
+        "start": "next start",
+        "lint": "next lint",
+        "db:generate": "prisma generate",
+        "db:migrate": "prisma migrate dev",
+        "db:studio": "prisma studio",
+        "db:seed": "tsx prisma/seed.ts",
+        "db:push": "prisma db push",
+        "worker:start": "tsx src/workers/export-worker.ts",
+        "worker:consolidation": "tsx src/workers/consolidation-worker.ts",
+        "metrics:serve": "tsx src/metrics/server.ts",
+        "postinstall": "prisma generate"
+    },
+    "dependencies": {
+        "@prisma/client": "^5.13.0",
+        "@types/bcryptjs": "^2.4.6",
+        "@types/qrcode": "^1.5.5",
+        "@types/speakeasy": "^2.0.10",
+        "@types/uuid": "^9.0.8",
+        "@upstash/ratelimit": "^1.1.3",
+        "@upstash/redis": "^1.30.0",
+        "bcryptjs": "^2.4.3",
+        "bullmq": "^5.7.0",
+        "class-variance-authority": "^0.7.0",
+        "clsx": "^2.1.1",
+        "date-fns": "^3.6.0",
+        "dotenv": "^17.4.2",
+        "framer-motion": "^11.1.0",
+        "ioredis": "^5.4.1",
+        "jose": "^5.3.0",
+        "lucide-react": "^0.378.0",
+        "next": "^14.2.0",
+        "next-auth": "^4.24.7",
+        "next-themes": "^0.4.6",
+        "openai": "^7.4.0",
+        "prom-client": "^15.1.0",
+        "qrcode": "^1.5.3",
+        "react": "^18.3.0",
+        "react-dom": "^18.3.0",
+        "speakeasy": "^2.0.0",
+        "tailwind-merge": "^2.3.0",
+        "uuid": "^9.0.1",
+        "web-push": "^3.6.7",
+        "zod": "^3.23.0"
+    },
+    "devDependencies": {
+        "@types/node": "^20.12.0",
+        "@types/react": "^18.3.0",
+        "@types/react-dom": "^18.3.0",
+        "autoprefixer": "^10.4.19",
+        "eslint": "^8.57.0",
+        "eslint-config-next": "^14.2.0",
+        "postcss": "^8.4.38",
+        "prisma": "^5.13.0",
+        "tailwindcss": "^3.4.3",
+        "tsx": "^4.9.0",
+        "typescript": "^5.4.5"
+    },
+    "allowScripts": {
+        "@prisma/client@5.22.0": true,
+        "prisma@5.22.0": true,
+        "@prisma/engines@5.22.0": true
+    }
+}
+
+

@@ -2,6 +2,7 @@
 import { JWT } from 'next-auth/jwt';
 import CredentialsProvider from 'next-auth/providers/credentials';
 import bcrypt from 'bcryptjs';
+import { randomUUID } from 'crypto';
 import { prisma } from './db';
 import { redis, storeSession } from './redis';
 import { logAudit } from './audit';
@@ -38,6 +39,7 @@ declare module 'next-auth/jwt' {
 }
 
 export const authOptions: NextAuthOptions = {
+  trustHost: true,
   providers: [
     CredentialsProvider({
       name: 'credentials',
@@ -137,11 +139,11 @@ export const authOptions: NextAuthOptions = {
 
   session: {
     strategy: 'jwt',
-    maxAge: 15 * 60,
+    maxAge: 30 * 24 * 60 * 60,
   },
 
   jwt: {
-    maxAge: 15 * 60,
+    maxAge: 30 * 24 * 60 * 60,
   },
 
   callbacks: {
@@ -151,9 +153,9 @@ export const authOptions: NextAuthOptions = {
         token.email = user.email;
         token.name = user.name;
         token.memoryPaused = user.memoryPaused;
-        token.accessToken = crypto.randomUUID();
+        token.accessToken = randomUUID();
 
-        const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
+        const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
         try {
           await storeSession(token.accessToken, user.id, expiresAt);
         } catch (redisErr) {

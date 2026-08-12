@@ -1,6 +1,13 @@
-'use client';
+﻿'use client';
 
 import { useState, useRef, useEffect } from 'react';
+
+function generateId(): string {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  return Date.now() + '-' + Math.random().toString(36).slice(2, 11);
+}
 import { ChatMessageList } from './message-list';
 import { ChatInput } from './chat-input';
 import { TypingIndicator } from './typing-indicator';
@@ -160,7 +167,7 @@ export function ChatInterface({ userId }: ChatInterfaceProps) {
 
   async function sendMessage(content: string) {
     const userMessage: Message = {
-      id: crypto.randomUUID(),
+      id: generateId(),
       role: 'USER',
       content,
       createdAt: new Date().toISOString(),
@@ -196,7 +203,7 @@ export function ChatInterface({ userId }: ChatInterfaceProps) {
       }
 
       const assistantMessage: Message = {
-        id: crypto.randomUUID(),
+        id: generateId(),
         role: 'ASSISTANT',
         content: data.response,
         createdAt: new Date().toISOString(),
@@ -205,7 +212,7 @@ export function ChatInterface({ userId }: ChatInterfaceProps) {
       setMessages((prev) => [...prev, assistantMessage]);
     } catch (error) {
       const errorMessage: Message = {
-        id: crypto.randomUUID(),
+        id: generateId(),
         role: 'ASSISTANT',
         content: "I'm having a little trouble right now. Could you try again in a moment?",
         createdAt: new Date().toISOString(),
@@ -278,3 +285,4 @@ export function ChatInterface({ userId }: ChatInterfaceProps) {
     </div>
   );
 }
+
