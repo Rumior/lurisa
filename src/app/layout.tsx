@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+﻿import type { Metadata, Viewport } from 'next';
 import { Inter, Source_Serif_4 } from 'next/font/google';
 import './globals.css';
 import { Providers } from '@/components/providers';
@@ -7,8 +7,16 @@ const inter = Inter({ subsets: ['latin'], variable: '--font-inter', display: 'sw
 const sourceSerif = Source_Serif_4({ subsets: ['latin'], variable: '--font-source-serif', display: 'swap', weight: ['400', '600'] });
 
 export const metadata: Metadata = {
-  title: 'lurisa — Your Living Intelligence',
+  title: 'lurisa \u2014 Your Living Intelligence',
   description: 'A memory-first personal intelligence that grows with you.',
+};
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+  viewportFit: 'cover',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
