@@ -18,20 +18,16 @@ export default function ChatPage() {
 
     const orig = {
       htmlOverflow: html.style.overflow,
-      htmlHeight: html.style.height,
       bodyOverflow: body.style.overflow,
-      bodyHeight: body.style.height,
     };
 
     html.style.overflow = 'hidden';
-    html.style.height = '100dvh';
     body.style.overflow = 'hidden';
-    body.style.height = '100dvh';
 
     const resize = () => {
       const vv = window.visualViewport;
-      const h = vv ? vv.height : window.innerHeight;
-      el.style.height = `${Math.max(h - 64, 0)}px`;
+      const keyboardHeight = window.innerHeight - (vv ? vv.height : window.innerHeight);
+      el.style.bottom = `${keyboardHeight}px`;
       window.scrollTo(0, 0);
     };
 
@@ -52,9 +48,7 @@ export default function ChatPage() {
       document.removeEventListener('touchmove', preventScroll);
 
       html.style.overflow = orig.htmlOverflow;
-      html.style.height = orig.htmlHeight;
       body.style.overflow = orig.bodyOverflow;
-      body.style.height = orig.bodyHeight;
     };
   }, []);
 

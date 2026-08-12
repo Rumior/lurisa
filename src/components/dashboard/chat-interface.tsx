@@ -232,3 +232,4 @@ export function ChatInterface({ mode = 'chat' }: ChatInterfaceProps) {
     </div>
   );
 }
+
