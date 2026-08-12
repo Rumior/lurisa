@@ -1,4 +1,4 @@
-﻿import { NextAuthOptions } from 'next-auth';
+import { NextAuthOptions } from 'next-auth';
 import { JWT } from 'next-auth/jwt';
 import CredentialsProvider from 'next-auth/providers/credentials';
 import bcrypt from 'bcryptjs';
@@ -19,7 +19,6 @@ declare module 'next-auth' {
     };
     accessToken: string;
   }
-
   interface User {
     id: string;
     email: string;
@@ -38,7 +37,31 @@ declare module 'next-auth/jwt' {
   }
 }
 
-export const authOptions: NextAuthOptions = { // v4 compatible
+function getClientIp(req: any): string {
+  try {
+    const h = req?.headers;
+    if (typeof h?.get === 'function') {
+      return h.get('x-forwarded-for') || h.get('x-real-ip') || 'unknown';
+    }
+    return h?.['x-forwarded-for'] || h?.['x-real-ip'] || 'unknown';
+  } catch {
+    return 'unknown';
+  }
+}
+
+function getUserAgent(req: any): string {
+  try {
+    const h = req?.headers;
+    if (typeof h?.get === 'function') {
+      return h.get('user-agent') || 'unknown';
+    }
+    return h?.['user-agent'] || 'unknown';
+  } catch {
+    return 'unknown';
+  }
+}
+
+export const authOptions: NextAuthOptions = {
   providers: [
     CredentialsProvider({
       name: 'credentials',
@@ -49,89 +72,120 @@ export const authOptions: NextAuthOptions = { // v4 compatible
         deviceName: { label: 'Device Name', type: 'text' },
       },
       async authorize(credentials, req) {
-        if (!credentials?.email || !credentials?.password) {
-          return null;
-        }
+        console.log('[AUTH] authorize() called for:', credentials?.email);
+        try {
+          if (!credentials?.email || !credentials?.password) {
+            console.log('[AUTH] Missing email or password');
+            return null;
+          }
 
-        const result = loginSchema.safeParse({
-          email: credentials.email,
-          password: credentials.password,
-          deviceFingerprint: credentials.deviceFingerprint,
-          deviceName: credentials.deviceName,
-        });
-
-        if (!result.success) {
-          return null;
-        }
-
-        const user = await prisma.users.findUnique({
-          where: { email: credentials.email.toLowerCase() },
-          include: { devices: true },
-        });
-
-        if (!user || !user.passwordHash) {
-          return null;
-        }
-
-        const isValid = await bcrypt.compare(credentials.password, user.passwordHash);
-        if (!isValid) {
-          await logAudit({
-            userId: user.id,
-            action: 'auth.login.failed',
-            ipAddress: req?.headers?.['x-forwarded-for'] as string || req?.headers?.['x-real-ip'] as string,
-            userAgent: req?.headers?.['user-agent'] as string,
+          const result = loginSchema.safeParse({
+            email: credentials.email,
+            password: credentials.password,
+            deviceFingerprint: credentials.deviceFingerprint,
+            deviceName: credentials.deviceName,
           });
-          return null;
-        }
 
-        if (credentials.deviceFingerprint) {
-          const existingDevice = user.devices.find(
-            (d) => d.fingerprint === credentials.deviceFingerprint
-          );
+          if (!result.success) {
+            console.log('[AUTH] Validation failed:', result.error.flatten());
+            return null;
+          }
 
-          if (!existingDevice) {
-            await prisma.devices.create({
-              data: {
+          const user = await prisma.users.findUnique({
+            where: { email: credentials.email.toLowerCase() },
+            include: { devices: true },
+          });
+
+          if (!user || !user.passwordHash) {
+            console.log('[AUTH] User not found or no password hash');
+            return null;
+          }
+
+          const isValid = await bcrypt.compare(credentials.password, user.passwordHash);
+          if (!isValid) {
+            console.log('[AUTH] Password mismatch for user:', user.id);
+            try {
+              await logAudit({
                 userId: user.id,
-                fingerprint: credentials.deviceFingerprint,
-                name: credentials.deviceName || 'Unknown Device',
-                trusted: false,
-                lastIpAddress: req?.headers?.['x-forwarded-for'] as string || req?.headers?.['x-real-ip'] as string,
-                userAgent: req?.headers?.['user-agent'] as string,
-              },
-            });
+                action: 'auth.login.failed',
+                ipAddress: getClientIp(req),
+                userAgent: getUserAgent(req),
+              });
+            } catch (auditErr) {
+              console.warn('[AUTH] Audit log failed (non-blocking):', auditErr);
+            }
+            return null;
+          }
 
+          if (credentials.deviceFingerprint) {
+            try {
+              const existingDevice = user.devices.find(
+                (d) => d.fingerprint === credentials.deviceFingerprint
+              );
+
+              if (!existingDevice) {
+                try {
+                  await prisma.devices.create({
+                    data: {
+                      userId: user.id,
+                      fingerprint: credentials.deviceFingerprint,
+                      name: credentials.deviceName || 'Unknown Device',
+                      trusted: false,
+                      lastIpAddress: getClientIp(req),
+                      userAgent: getUserAgent(req),
+                    },
+                  });
+
+                  await logAudit({
+                    userId: user.id,
+                    action: 'auth.device.new',
+                    details: 'New device detected: ' + (credentials.deviceName || 'Unknown'),
+                    ipAddress: getClientIp(req),
+                    userAgent: getUserAgent(req),
+                  });
+                } catch (createErr: any) {
+                  if (createErr.code === 'P2002') {
+                    console.warn('[AUTH] Device fingerprint already exists, skipping creation');
+                  } else {
+                    console.warn('[AUTH] Device create failed (non-blocking):', createErr);
+                  }
+                }
+              } else {
+                await prisma.devices.update({
+                  where: { id: existingDevice.id },
+                  data: {
+                    lastSeenAt: new Date(),
+                    lastIpAddress: getClientIp(req),
+                  },
+                });
+              }
+            } catch (deviceErr) {
+              console.warn('[AUTH] Device tracking failed (non-blocking):', deviceErr);
+            }
+          }
+
+          try {
             await logAudit({
               userId: user.id,
-              action: 'auth.device.new',
-              details: `New device detected: ${credentials.deviceName || 'Unknown'}`,
-              ipAddress: req?.headers?.['x-forwarded-for'] as string,
-              userAgent: req?.headers?.['user-agent'] as string,
+              action: 'auth.login.success',
+              ipAddress: getClientIp(req),
+              userAgent: getUserAgent(req),
             });
-          } else {
-            await prisma.devices.update({
-              where: { id: existingDevice.id },
-              data: {
-                lastSeenAt: new Date(),
-                lastIpAddress: req?.headers?.['x-forwarded-for'] as string || req?.headers?.['x-real-ip'] as string,
-              },
-            });
+          } catch (auditErr) {
+            console.warn('[AUTH] Success audit log failed (non-blocking):', auditErr);
           }
+
+          console.log('[AUTH] Login successful for user:', user.id);
+          return {
+            id: user.id,
+            email: user.email,
+            name: user.name,
+            memoryPaused: user.memoryPaused,
+          };
+        } catch (err) {
+          console.error('[AUTH] Unexpected error in authorize():', err);
+          return null;
         }
-
-        await logAudit({
-          userId: user.id,
-          action: 'auth.login.success',
-          ipAddress: req?.headers?.['x-forwarded-for'] as string,
-          userAgent: req?.headers?.['user-agent'] as string,
-        });
-
-        return {
-          id: user.id,
-          email: user.email,
-          name: user.name,
-          memoryPaused: user.memoryPaused,
-        };
       },
     }),
   ],
@@ -146,7 +200,7 @@ export const authOptions: NextAuthOptions = { // v4 compatible
   },
 
   callbacks: {
-    async jwt({ token, user, account }) {
+    async jwt({ token, user }) {
       if (user) {
         token.id = user.id;
         token.email = user.email;
@@ -176,28 +230,28 @@ export const authOptions: NextAuthOptions = { // v4 compatible
 
   pages: {
     signIn: '/login',
-    signOut: '/logout',
     error: '/login',
-    newUser: '/onboarding',
   },
 
   events: {
     async signOut({ token }) {
       if (token?.accessToken) {
-        const { revokeSession } = await import('./redis');
-        await revokeSession(token.accessToken);
+        try {
+          const { revokeSession } = await import('./redis');
+          await revokeSession(token.accessToken);
+        } catch (err) {
+          console.warn('[AUTH] Session revocation failed:', err);
+        }
       }
     },
   },
 };
 
-export async function getCurrentUser(token: JWT): Promise<{ id: string; email: string; name?: string | null } | null> {
+export async function getCurrentUser(token: JWT) {
   if (!token?.id) return null;
-
   const user = await prisma.users.findUnique({
     where: { id: token.id },
     select: { id: true, email: true, name: true, memoryPaused: true },
   });
-
   return user;
 }
