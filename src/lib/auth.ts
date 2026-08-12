@@ -1,4 +1,4 @@
-import { NextAuthOptions } from 'next-auth';
+﻿import { NextAuthOptions } from 'next-auth';
 import { JWT } from 'next-auth/jwt';
 import CredentialsProvider from 'next-auth/providers/credentials';
 import bcrypt from 'bcryptjs';
@@ -154,7 +154,11 @@ export const authOptions: NextAuthOptions = {
         token.accessToken = crypto.randomUUID();
 
         const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
-        await storeSession(token.accessToken, user.id, expiresAt);
+        try {
+          await storeSession(token.accessToken, user.id, expiresAt);
+        } catch (redisErr) {
+          console.warn('[AUTH] Redis session store failed (non-blocking):', redisErr);
+        }
       }
       return token;
     },
