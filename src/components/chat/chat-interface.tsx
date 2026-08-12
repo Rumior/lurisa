@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { useState, useRef, useEffect } from 'react';
 import { ChatMessageList } from './message-list';
@@ -28,18 +28,67 @@ export function ChatInterface({ userId }: ChatInterfaceProps) {
   const [isTyping, setIsTyping] = useState(false);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [mounted, setMounted] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const chatContainerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (window.innerWidth >= 1024) return;
+
+    const el = chatContainerRef.current;
+    if (!el) return;
+
+    const html = document.documentElement;
+    const body = document.body;
+    const origHtml = html.style.overflow;
+    const origBody = body.style.overflow;
+
+    html.style.overflow = 'hidden';
+    body.style.overflow = 'hidden';
+
+    const resize = () => {
+      const vv = window.visualViewport;
+      const h = vv ? vv.height : window.innerHeight;
+      el.style.height = `${Math.max(h - 64, 0)}px`;
+      window.scrollTo(0, 0);
+    };
+
+    const preventScroll = (e: TouchEvent) => {
+      const target = e.target as HTMLElement;
+      if (target.closest('[data-scroll-area]')) return;
+      e.preventDefault();
+    };
+
+    resize();
+    window.visualViewport?.addEventListener('resize', resize);
+    window.visualViewport?.addEventListener('scroll', resize);
+    document.addEventListener('touchmove', preventScroll, { passive: false });
+
+    return () => {
+      window.visualViewport?.removeEventListener('resize', resize);
+      window.visualViewport?.removeEventListener('scroll', resize);
+      document.removeEventListener('touchmove', preventScroll);
+      html.style.overflow = origHtml;
+      body.style.overflow = origBody;
+      el.style.height = '';
+    };
+  }, []);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
   useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
     scrollToBottom();
   }, [messages, isTyping]);
 
   useEffect(() => {
-    let mounted = true;
+    let active = true;
 
     async function init() {
       try {
@@ -47,7 +96,7 @@ export function ChatInterface({ userId }: ChatInterfaceProps) {
         if (savedId) {
           const res = await fetch(`/api/conversations/${savedId}`);
           const data = await res.json();
-          if (!mounted) return;
+          if (!active) return;
 
           if (data.conversation?.messages?.length) {
             setConversationId(savedId);
@@ -64,12 +113,49 @@ export function ChatInterface({ userId }: ChatInterfaceProps) {
       } catch (err) {
         console.error('Failed to load conversation:', err);
       } finally {
-        if (mounted) setIsLoading(false);
+        if (active) setIsLoading(false);
       }
     }
 
     init();
-    return () => { mounted = false; };
+    return () => { active = false; };
+  }, []);
+
+  // Proactive conversation starter polling
+  useEffect(() => {
+    let active = true;
+
+    async function checkProactive() {
+      try {
+        const res = await fetch('/api/chat/proactive');
+        const data = await res.json();
+        if (!active || !data.message) return;
+
+        setMessages((prev) => {
+          if (prev.some((m) => m.id === data.message.id)) return prev;
+          return [...prev, data.message];
+        });
+
+        setConversationId((prev) => {
+          if (prev) return prev;
+          if (data.conversationId) {
+            localStorage.setItem('lurisa-conversation-id', data.conversationId);
+            return data.conversationId;
+          }
+          return prev;
+        });
+      } catch (err) {
+        // Silent fail
+      }
+    }
+
+    checkProactive();
+    const interval = setInterval(checkProactive, 5 * 60 * 1000);
+
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
   }, []);
 
   async function sendMessage(content: string) {
@@ -132,6 +218,19 @@ export function ChatInterface({ userId }: ChatInterfaceProps) {
 
   function onSuggestion(suggestion: string) {
     sendMessage(suggestion);
+  }
+
+  // Prevent hydration mismatch: render nothing until client mount
+  if (!mounted) {
+    return (
+    <div ref={chatContainerRef} className="flex flex-col h-full max-w-3xl mx-auto">
+        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 py-6 space-y-6">
+          <div className="flex items-center justify-center py-8">
+            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-500"></div>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (

@@ -12,19 +12,19 @@ function createRedisClient(): Redis {
     return new Redis({
       host: 'localhost',
       port: 6379,
-      lazyConnect: true,
+      
       retryStrategy: (times) => Math.min(times * 50, 2000),
       maxRetriesPerRequest: 3,
-      enableOfflineQueue: false,
+      
     });
   }
 
   if (url.startsWith('rediss://') || url.startsWith('redis://')) {
     return new Redis(url, {
-      lazyConnect: true,
+      
       retryStrategy: (times) => Math.min(times * 50, 2000),
       maxRetriesPerRequest: 3,
-      enableOfflineQueue: false,
+      
       keepAlive: 30000,
     });
   }
@@ -33,10 +33,10 @@ function createRedisClient(): Redis {
   return new Redis({
     host: host || 'localhost',
     port: parseInt(port || '6379'),
-    lazyConnect: true,
+    
     retryStrategy: (times) => Math.min(times * 50, 2000),
     maxRetriesPerRequest: 3,
-    enableOfflineQueue: false,
+    
   });
 }
 

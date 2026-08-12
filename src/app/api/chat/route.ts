@@ -99,12 +99,23 @@ export async function POST(req: NextRequest) {
     }
 
     // â”€â”€ Generate response â”€â”€
+    // Fetch full conversation history from DB
+    const dbMessages = await prisma.messages.findMany({
+      where: { conversationId: convId },
+      orderBy: { createdAt: 'asc' },
+      select: { role: true, content: true },
+    });
+    const fullHistory = dbMessages.map((m) => ({
+      role: m.role.toLowerCase() as 'user' | 'assistant',
+      content: m.content,
+    }));
+
     const result = await generateLurisaResponse({
       message: intentContext ? `${intentContext}
 
 ${message}` : message,
       userId: token.id,
-      conversationHistory: history || [],
+      conversationHistory: fullHistory,
     });
 
     // â”€â”€ Store assistant message â”€â”€

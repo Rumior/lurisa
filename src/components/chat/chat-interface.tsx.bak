@@ -1,7 +1,6 @@
 ﻿'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { History, Plus, X } from 'lucide-react';
 import { ChatMessageList } from './message-list';
 import { ChatInput } from './chat-input';
 import { TypingIndicator } from './typing-indicator';
@@ -11,12 +10,6 @@ interface Message {
   role: 'USER' | 'ASSISTANT';
   content: string;
   createdAt: string;
-}
-
-interface Conversation {
-  id: string;
-  title: string;
-  updatedAt: string;
 }
 
 interface ChatInterfaceProps {
@@ -34,9 +27,7 @@ export function ChatInterface({ userId }: ChatInterfaceProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isTyping, setIsTyping] = useState(false);
   const [conversationId, setConversationId] = useState<string | null>(null);
-  const [conversations, setConversations] = useState<Conversation[]>([]);
-  const [showHistory, setShowHistory] = useState(false);
-  const [isLoadingHistory, setIsLoadingHistory] = useState(true);
+  const [isLoading, setIsLoading] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -52,41 +43,70 @@ export function ChatInterface({ userId }: ChatInterfaceProps) {
 
     async function init() {
       try {
-        const listRes = await fetch('/api/conversations');
-        const listData = await listRes.json();
-        if (!mounted) return;
-
-        if (listData.conversations) {
-          setConversations(listData.conversations);
-        }
-
         const savedId = localStorage.getItem('lurisa-conversation-id');
-        if (savedId && listData.conversations?.some((c: Conversation) => c.id === savedId)) {
-          const convRes = await fetch(/api/conversations/);
-          const convData = await convRes.json();
+        if (savedId) {
+          const res = await fetch(`/api/conversations/${savedId}`);
+          const data = await res.json();
           if (!mounted) return;
 
-          if (convData.conversation) {
+          if (data.conversation?.messages?.length) {
             setConversationId(savedId);
-            setMessages(convData.conversation.messages.map((m: any) => ({
+            setMessages(data.conversation.messages.map((m: any) => ({
               id: m.id,
               role: m.role.toUpperCase() as 'USER' | 'ASSISTANT',
               content: m.content,
               createdAt: m.createdAt,
             })));
+          } else {
+            localStorage.removeItem('lurisa-conversation-id');
           }
-        } else if (savedId) {
-          localStorage.removeItem('lurisa-conversation-id');
         }
       } catch (err) {
-        console.error('Failed to initialize chat:', err);
+        console.error('Failed to load conversation:', err);
       } finally {
-        if (mounted) setIsLoadingHistory(false);
+        if (mounted) setIsLoading(false);
       }
     }
 
     init();
     return () => { mounted = false; };
+  }, []);
+
+  // Proactive conversation starter polling
+  useEffect(() => {
+    let mounted = true;
+
+    async function checkProactive() {
+      try {
+        const res = await fetch('/api/chat/proactive');
+        const data = await res.json();
+        if (!mounted || !data.message) return;
+
+        setMessages((prev) => {
+          if (prev.some((m) => m.id === data.message.id)) return prev;
+          return [...prev, data.message];
+        });
+
+        setConversationId((prev) => {
+          if (prev) return prev;
+          if (data.conversationId) {
+            localStorage.setItem('lurisa-conversation-id', data.conversationId);
+            return data.conversationId;
+          }
+          return prev;
+        });
+      } catch (err) {
+        // Silent fail — proactive is non-critical
+      }
+    }
+
+    checkProactive();
+    const interval = setInterval(checkProactive, 5 * 60 * 1000);
+
+    return () => {
+      mounted = false;
+      clearInterval(interval);
+    };
   }, []);
 
   async function sendMessage(content: string) {
@@ -124,9 +144,6 @@ export function ChatInterface({ userId }: ChatInterfaceProps) {
       if (data.conversationId && !conversationId) {
         setConversationId(data.conversationId);
         localStorage.setItem('lurisa-conversation-id', data.conversationId);
-        const listRes = await fetch('/api/conversations');
-        const listData = await listRes.json();
-        if (listData.conversations) setConversations(listData.conversations);
       }
 
       const assistantMessage: Message = {
@@ -154,101 +171,16 @@ export function ChatInterface({ userId }: ChatInterfaceProps) {
     sendMessage(suggestion);
   }
 
-  function startNewChat() {
-    setMessages([]);
-    setConversationId(null);
-    setShowHistory(false);
-    localStorage.removeItem('lurisa-conversation-id');
-  }
-
-  async function loadConversation(id: string) {
-    setIsLoadingHistory(true);
-    setShowHistory(false);
-    try {
-      const res = await fetch(/api/conversations/);
-      const data = await res.json();
-      if (data.conversation) {
-        setConversationId(id);
-        setMessages(data.conversation.messages.map((m: any) => ({
-          id: m.id,
-          role: m.role.toUpperCase() as 'USER' | 'ASSISTANT',
-          content: m.content,
-          createdAt: m.createdAt,
-        })));
-        localStorage.setItem('lurisa-conversation-id', id);
-      }
-    } catch (err) {
-      console.error('Failed to load conversation:', err);
-    } finally {
-      setIsLoadingHistory(false);
-    }
-  }
-
   return (
-    <div className="flex flex-col h-full max-w-3xl mx-auto relative">
-      {/* Header */}
-      <div className="flex-shrink-0 flex items-center justify-between px-4 py-2 border-b border-parchment-700/30 bg-parchment-100/50 dark:bg-indigo-900/50">
-        <button
-          onClick={() => setShowHistory(!showHistory)}
-          className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium text-charcoal-500 dark:text-parchment-300 hover:bg-parchment-500 dark:hover:bg-indigo-800 transition-colors"
-        >
-          <History size={16} />
-          History
-        </button>
-        <button
-          onClick={startNewChat}
-          className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium text-charcoal-500 dark:text-parchment-300 hover:bg-parchment-500 dark:hover:bg-indigo-800 transition-colors"
-        >
-          <Plus size={16} />
-          New Chat
-        </button>
-      </div>
-
-      {/* Messages */}
-      <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 py-6 space-y-6 relative">
-        {isLoadingHistory && (
+    <div className="flex flex-col h-full max-w-3xl mx-auto">
+      <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 py-6 space-y-6">
+        {isLoading && (
           <div className="flex items-center justify-center py-8">
             <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-500"></div>
           </div>
         )}
 
-        {showHistory && (
-          <div className="absolute inset-0 z-20 bg-parchment-100 dark:bg-indigo-900 p-4 overflow-y-auto">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-serif text-indigo-500 dark:text-indigo-300">Conversations</h3>
-              <button
-                onClick={() => setShowHistory(false)}
-                className="p-1 rounded-md hover:bg-parchment-500 dark:hover:bg-indigo-800 transition-colors"
-              >
-                <X size={18} className="text-charcoal-500 dark:text-parchment-300" />
-              </button>
-            </div>
-            {conversations.length === 0 ? (
-              <p className="text-sm text-charcoal-300 dark:text-parchment-400">No conversations yet.</p>
-            ) : (
-              <div className="space-y-2">
-                {conversations.map((conv) => (
-                  <button
-                    key={conv.id}
-                    onClick={() => loadConversation(conv.id)}
-                    className={"w-full text-left px-4 py-3 rounded-lg border transition-colors text-sm ${
-                      conv.id === conversationId
-                        ? "border-indigo-500 bg-indigo-50 dark:bg-indigo-800/50 text-indigo-700 dark:text-indigo-200"
-                        : "border-parchment-700/30 bg-parchment-100 hover:bg-parchment-500 dark:bg-indigo-900 dark:hover:bg-indigo-800 text-charcoal-500 dark:text-parchment-300"
-                    }}
-                  >
-                    <div className="font-medium truncate">{conv.title}</div>
-                    <div className="text-xs text-charcoal-300 dark:text-parchment-400 mt-1">
-                      {new Date(conv.updatedAt).toLocaleDateString()} {new Date(conv.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                    </div>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {messages.length === 0 && !isLoadingHistory && !showHistory && (
+        {messages.length === 0 && !isLoading && (
           <div className="space-y-4">
             <div className="text-center space-y-2 py-8">
               <h2 className="text-xl font-serif text-indigo-500 dark:text-indigo-300">
@@ -278,9 +210,8 @@ export function ChatInterface({ userId }: ChatInterfaceProps) {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Input */}
       <div className="flex-shrink-0 border-t border-parchment-700/30 bg-parchment-100/50 dark:bg-indigo-900/50 px-4 pt-4 pb-6">
-        <ChatInput onSend={sendMessage} disabled={isTyping || isLoadingHistory} />
+        <ChatInput onSend={sendMessage} disabled={isTyping || isLoading} />
       </div>
     </div>
   );

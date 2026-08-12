@@ -87,11 +87,11 @@ export async function generateLurisaResponse(options: GenerateOptions): Promise<
       getUserName(userId),
     ]);
 
-    const systemPrompt = buildSystemPrompt(personality, memoryCtx, userName);
+    const systemPrompt = buildSystemPrompt(personality, memoryCtx, userName) + '\n\nCRITICAL: Only reference facts, people, or events that appear in the conversation history or memory context provided above. NEVER invent names, people, events, or details that are not explicitly present in the history. If you do not know something, do not guess. Just respond naturally without mentioning it.';
 
     const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
       { role: 'system', content: systemPrompt },
-      ...conversationHistory.slice(-6).map((m) => ({
+      ...conversationHistory.map((m) => ({
         role: m.role as 'user' | 'assistant',
         content: m.content,
       })),

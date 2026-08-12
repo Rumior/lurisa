@@ -23,9 +23,10 @@ export async function getMemoryContext(
         JOIN memory_embeddings e ON m.id = e.memoryId
         WHERE m.userId = ${userId}
           AND m.status = 'ACTIVE'
+          AND m.importance >= 0.5
           AND 1 - (e.embedding <=> ${vec}::vector) >= 0.72
         ORDER BY e.embedding <=> ${vec}::vector
-        LIMIT 8
+        LIMIT 5
       `;
       vectorIds = similar.map(s => s.id);
     } catch (e) {
@@ -44,17 +45,18 @@ export async function getMemoryContext(
     where: {
       userId,
       status: 'ACTIVE',
+      importance: { gte: 0.5 },
       ...(vectorIds.length ? { id: { notIn: vectorIds } } : {}),
     },
     orderBy: [{ importance: 'desc' }, { createdAt: 'desc' }],
-    take: Math.max(0, 8 - vectorMemories.length),
+    take: Math.max(0, 5 - vectorMemories.length),
     select: { statement: true, category: true }
   }).catch(() => []);
 
   const allFacts = [
     ...vectorMemories.map(m => `[${m.category}] ${m.statement}`),
     ...recentMemories.map(m => `[${m.category}] ${m.statement}`)
-  ].slice(0, 10);
+  ].slice(0, 6);
 
   return {
     recentFacts: allFacts,
