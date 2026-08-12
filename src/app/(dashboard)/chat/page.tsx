@@ -18,57 +18,45 @@ export default function ChatPage() {
 
     const orig = {
       htmlOverflow: html.style.overflow,
-      htmlOverscroll: (html.style as any).overscrollBehavior,
       htmlHeight: html.style.height,
-      htmlPosition: html.style.position,
       bodyOverflow: body.style.overflow,
-      bodyOverscroll: (body.style as any).overscrollBehavior,
-      bodyTouchAction: (body.style as any).touchAction,
       bodyHeight: body.style.height,
-      bodyPosition: body.style.position,
     };
 
-    html.style.position = 'fixed';
-    html.style.inset = '0';
+    // dvh shrinks with keyboard so body never exceeds visible area
     html.style.overflow = 'hidden';
-    html.style.height = '100%';
-    (html.style as any).overscrollBehavior = 'none';
-
-    body.style.position = 'fixed';
-    body.style.inset = '0';
+    html.style.height = '100dvh';
     body.style.overflow = 'hidden';
-    body.style.height = '100%';
-    (body.style as any).overscrollBehavior = 'none';
-    (body.style as any).touchAction = 'none';
+    body.style.height = '100dvh';
 
     const resize = () => {
       const vv = window.visualViewport;
       const h = vv ? vv.height : window.innerHeight;
       el.style.height = `${Math.max(h - 64, 0)}px`;
+      window.scrollTo(0, 0);
+    };
+
+    // Nuclear: prevent ALL touchmove outside the message list
+    const preventScroll = (e: TouchEvent) => {
+      const target = e.target as HTMLElement;
+      if (target.closest('[data-scroll-area]')) return;
+      e.preventDefault();
     };
 
     resize();
     window.visualViewport?.addEventListener('resize', resize);
     window.visualViewport?.addEventListener('scroll', resize);
-    window.addEventListener('resize', resize);
+    document.addEventListener('touchmove', preventScroll, { passive: false });
 
     return () => {
       window.visualViewport?.removeEventListener('resize', resize);
       window.visualViewport?.removeEventListener('scroll', resize);
-      window.removeEventListener('resize', resize);
+      document.removeEventListener('touchmove', preventScroll);
 
       html.style.overflow = orig.htmlOverflow;
-      (html.style as any).overscrollBehavior = orig.htmlOverscroll;
       html.style.height = orig.htmlHeight;
-      html.style.position = orig.htmlPosition;
-      html.style.inset = '';
-
       body.style.overflow = orig.bodyOverflow;
-      (body.style as any).overscrollBehavior = orig.bodyOverscroll;
-      (body.style as any).touchAction = orig.bodyTouchAction;
       body.style.height = orig.bodyHeight;
-      body.style.position = orig.bodyPosition;
-      body.style.inset = '';
     };
   }, []);
 
@@ -76,7 +64,7 @@ export default function ChatPage() {
     <>
       <div
         ref={chatRef}
-        className="lg:hidden fixed top-16 left-0 right-0 z-20 flex flex-col bg-parchment-300 dark:bg-parchment-900 overscroll-none"
+        className="lg:hidden fixed top-16 left-0 right-0 z-20 flex flex-col bg-parchment-300 dark:bg-parchment-900"
       >
         <ChatInterface />
       </div>

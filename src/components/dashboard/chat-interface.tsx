@@ -177,7 +177,7 @@ export function ChatInterface({ mode = 'chat' }: ChatInterfaceProps) {
       </div>
 
       {/* Messages */}
-      <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 py-2 space-y-3 [-webkit-overflow-scrolling:touch]">
+      <div data-scroll-area className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 py-2 space-y-3 [-webkit-overflow-scrolling:touch]">
         {messages.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-8 text-center space-y-4">
             <div className="h-12 w-12 rounded-full bg-indigo-100 flex items-center justify-center">
@@ -233,3 +233,4 @@ export function ChatInterface({ mode = 'chat' }: ChatInterfaceProps) {
     </div>
   );
 }
+
