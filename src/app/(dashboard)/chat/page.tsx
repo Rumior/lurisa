@@ -16,27 +16,30 @@ export default function ChatPage() {
     const html = document.documentElement;
     const body = document.body;
 
-    // Save originals
     const orig = {
       htmlOverflow: html.style.overflow,
+      htmlOverscroll: (html.style as any).overscrollBehavior,
       htmlHeight: html.style.height,
       htmlPosition: html.style.position,
       bodyOverflow: body.style.overflow,
+      bodyOverscroll: (body.style as any).overscrollBehavior,
+      bodyTouchAction: (body.style as any).touchAction,
       bodyHeight: body.style.height,
       bodyPosition: body.style.position,
-      bodyTouchAction: body.style.touchAction,
     };
 
-    // Nuclear lock: freeze the layout viewport to the visual viewport
     html.style.position = 'fixed';
     html.style.inset = '0';
     html.style.overflow = 'hidden';
     html.style.height = '100%';
+    (html.style as any).overscrollBehavior = 'none';
+
     body.style.position = 'fixed';
     body.style.inset = '0';
     body.style.overflow = 'hidden';
     body.style.height = '100%';
-    body.style.touchAction = 'none';
+    (body.style as any).overscrollBehavior = 'none';
+    (body.style as any).touchAction = 'none';
 
     const resize = () => {
       const vv = window.visualViewport;
@@ -55,14 +58,17 @@ export default function ChatPage() {
       window.removeEventListener('resize', resize);
 
       html.style.overflow = orig.htmlOverflow;
+      (html.style as any).overscrollBehavior = orig.htmlOverscroll;
       html.style.height = orig.htmlHeight;
       html.style.position = orig.htmlPosition;
       html.style.inset = '';
+
       body.style.overflow = orig.bodyOverflow;
+      (body.style as any).overscrollBehavior = orig.bodyOverscroll;
+      (body.style as any).touchAction = orig.bodyTouchAction;
       body.style.height = orig.bodyHeight;
       body.style.position = orig.bodyPosition;
       body.style.inset = '';
-      body.style.touchAction = orig.bodyTouchAction;
     };
   }, []);
 

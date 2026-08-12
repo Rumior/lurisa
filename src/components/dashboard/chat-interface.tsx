@@ -30,6 +30,15 @@ export function ChatInterface({ mode = 'chat' }: ChatInterfaceProps) {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isLoading]);
 
+  // Auto-resize textarea so it never has internal scroll (stops iOS scroll chaining)
+  useEffect(() => {
+    const el = document.getElementById('chat-textarea') as HTMLTextAreaElement | null;
+    if (el) {
+      el.style.height = 'auto';
+      el.style.height = `${Math.min(el.scrollHeight, 120)}px`;
+    }
+  }, [input]);
+
   async function loadMostRecentConversation() {
     try {
       const listRes = await fetch('/api/conversations');
@@ -87,6 +96,11 @@ export function ChatInterface({ mode = 'chat' }: ChatInterfaceProps) {
 
     setMessages((prev) => [...prev, userMessage]);
     setInput('');
+    
+    // Reset textarea height
+    const el = document.getElementById('chat-textarea') as HTMLTextAreaElement | null;
+    if (el) el.style.height = 'auto';
+    
     setIsLoading(true);
 
     const history = messages.slice(-8).map((m) => ({
@@ -163,7 +177,7 @@ export function ChatInterface({ mode = 'chat' }: ChatInterfaceProps) {
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto overscroll-contain px-4 py-2 space-y-3 min-h-0">
+      <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 py-2 space-y-3 [-webkit-overflow-scrolling:touch]">
         {messages.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-8 text-center space-y-4">
             <div className="h-12 w-12 rounded-full bg-indigo-100 flex items-center justify-center">
@@ -197,14 +211,15 @@ export function ChatInterface({ mode = 'chat' }: ChatInterfaceProps) {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Input */}
-      <div className="shrink-0 flex items-end space-x-2 px-4 py-2 border-t border-parchment-700/20 bg-parchment-100 dark:bg-indigo-900">
+      {/* Input — touch-none prevents drag-to-scroll-body on iOS */}
+      <div className="shrink-0 flex items-end space-x-2 px-4 py-2 border-t border-parchment-700/20 bg-parchment-100 dark:bg-indigo-900 touch-none">
         <Textarea
+          id="chat-textarea"
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder="Type your message..."
-          className="min-h-[40px] max-h-[80px] bg-transparent resize-none py-2 border-0 focus-visible:ring-0 focus-visible:ring-offset-0 flex-1"
+          className="min-h-[40px] max-h-[120px] bg-transparent resize-none py-2 border-0 focus-visible:ring-0 focus-visible:ring-offset-0 flex-1"
           disabled={isLoading}
         />
         <Button
@@ -218,5 +233,3 @@ export function ChatInterface({ mode = 'chat' }: ChatInterfaceProps) {
     </div>
   );
 }
-
-
