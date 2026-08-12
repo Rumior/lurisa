@@ -29,6 +29,9 @@ export default function ChatPage() {
     body.style.height = '100dvh';
 
     const resize = () => {
+      const vv = window.visualViewport;
+      const h = vv ? vv.height : window.innerHeight;
+      el.style.height = `${Math.max(h - 64, 0)}px`;
       window.scrollTo(0, 0);
     };
 
@@ -59,7 +62,7 @@ export default function ChatPage() {
     <>
       <div
         ref={chatRef}
-        className="lg:hidden fixed top-16 left-0 right-0 bottom-0 z-20 flex flex-col bg-parchment-300 dark:bg-parchment-900"
+        className="lg:hidden fixed top-16 left-0 right-0 z-20 flex flex-col bg-parchment-300 dark:bg-parchment-900"
       >
         <ChatInterface />
       </div>
