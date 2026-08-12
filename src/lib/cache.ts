@@ -1,4 +1,4 @@
-import { redis, redisKeys } from './redis';
+﻿import { redis, redisKeys } from './redis';
 
 interface CacheConfig {
   ttl?: number; // seconds
@@ -11,7 +11,7 @@ export const cache = {
     const data = await redis.get(redisKeys.cache(key));
     if (!data) return null;
     try {
-      return JSON.parse(data) as T;
+      return (typeof data === 'string' ? JSON.parse(data) : data) as T;
     } catch {
       return data as unknown as T;
     }

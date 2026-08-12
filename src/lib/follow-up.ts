@@ -1,4 +1,4 @@
-import { prisma } from './db';
+﻿import { prisma } from './db';
 import { redis, redisKeys } from './redis';
 import { generateStructuredResponse } from './llm/gateway';
 
@@ -297,7 +297,7 @@ function mapActionToNotificationType(actionType: string): any {
 
 function buildNotificationTitle(intent: any): string {
   switch (intent.actionType) {
-    case 'MORNING_ENCOURAGEMENT': return 'Good morning ☀️';
+    case 'MORNING_ENCOURAGEMENT': return 'Good morning â˜€ï¸';
     case 'CHECK_IN_QUESTION': return 'How did it go?';
     case 'ANNIVERSARY_NOTE': return 'A year ago today';
     case 'GOAL_REMINDER': return 'Tomorrow is the day';
@@ -311,7 +311,7 @@ function buildNotificationBody(intent: any): string {
     case 'MORNING_ENCOURAGEMENT': return `You mentioned ${stmt.toLowerCase()}. You've got this.`;
     case 'CHECK_IN_QUESTION': return `You said ${stmt.toLowerCase()}. How did it go?`;
     case 'ANNIVERSARY_NOTE': return `A year ago: ${stmt}`;
-    case 'GOAL_REMINDER': return `Just a heads up — ${stmt.toLowerCase()} is tomorrow.`;
+    case 'GOAL_REMINDER': return `Just a heads up â€” ${stmt.toLowerCase()} is tomorrow.`;
     default: return stmt;
   }
 }

@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+﻿import { NextRequest, NextResponse } from 'next/server';
 import { getToken } from 'next-auth/jwt';
 import { prisma } from '@/lib/db';
 import { redis } from '@/lib/redis';
@@ -20,7 +20,7 @@ export async function GET(req: NextRequest, { params }: { params: { jobId: strin
     // Check Redis first for completed export
     const cached = await redis.get(`export:${jobId}`);
     if (cached) {
-      const data = JSON.parse(cached);
+      const data = typeof cached === 'string' ? JSON.parse(cached) : cached;
       return NextResponse.json(data);
     }
 
@@ -33,12 +33,41 @@ export async function GET(req: NextRequest, { params }: { params: { jobId: strin
     ]);
 
     const exportData = {
-      exportedAt: new Date().toISOString(),
-      userId,
-      memories,
-      conversations,
-      goals,
-      timelineEvents,
+      memories: memories.map((m) => ({
+        id: m.id,
+        category: m.category,
+        type: m.type,
+        statement: m.statement,
+        confidence: m.confidence,
+        importance: m.importance,
+        createdAt: m.createdAt,
+      })),
+      conversations: conversations.map((c) => ({
+        id: c.id,
+        title: c.title,
+        createdAt: c.createdAt,
+        messages: c.messages.map((m) => ({
+          role: m.role,
+          content: m.content,
+          createdAt: m.createdAt,
+        })),
+      })),
+      goals: goals.map((g) => ({
+        id: g.id,
+        title: g.title,
+        description: g.description,
+        status: g.status,
+        targetDate: g.targetDate,
+        createdAt: g.createdAt,
+      })),
+      timelineEvents: timelineEvents.map((e) => ({
+        id: e.id,
+        title: e.title,
+        description: e.description,
+        date: e.eventDate,
+        category: e.eventType,
+        createdAt: e.createdAt,
+      })),
     };
 
     return NextResponse.json(exportData);
