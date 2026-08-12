@@ -1,7 +1,7 @@
-﻿'use client';
+'use client';
 
 import { useEffect, useRef } from 'react';
-import { ChatInterface } from '@/components/dashboard/chat-interface';
+import { ChatInterface } from '@/components/chat/chat-interface';
 
 export default function ChatPage() {
   const chatRef = useRef<HTMLDivElement>(null);

@@ -20,14 +20,23 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event) => {
   const { request } = event;
   const url = new URL(request.url);
+
+  // Never intercept API calls
   if (url.pathname.startsWith("/api/")) return;
+  // Never intercept Next.js internal chunks/assets
+  if (url.pathname.startsWith("/_next/")) return;
+  // Only handle GET requests
   if (request.method !== "GET") return;
 
+  // Stale-while-revalidate for app pages
   if (["/memories","/goals","/timeline"].includes(url.pathname)) {
     event.respondWith(
       caches.match(request).then((cached) => {
         const fetchPromise = fetch(request).then((res) => {
-          if (res.ok) caches.open(CACHE_NAME).then((c) => c.put(request, res.clone()));
+          if (res.ok) {
+            const clone = res.clone();
+            caches.open(CACHE_NAME).then((c) => c.put(request, clone));
+          }
           return res;
         });
         return cached || fetchPromise;
@@ -36,12 +45,16 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
+  // Cache-first for everything else (but not _next/*)
   event.respondWith(
     caches.match(request).then((cached) => {
       return (
         cached ||
         fetch(request).then((res) => {
-          if (res.ok) caches.open(CACHE_NAME).then((c) => c.put(request, res.clone()));
+          if (res.ok) {
+            const clone = res.clone();
+            caches.open(CACHE_NAME).then((c) => c.put(request, clone));
+          }
           return res;
         })
       );
