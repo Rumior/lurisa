@@ -102,8 +102,10 @@ export function checkHallucination(statement: string, userMessage: string): { is
   const statementNumbers = lowerStatement.match(/\b\d{1,4}\b/g) || [];
   const userNumbers = lowerUserMsg.match(/\b\d{1,4}\b/g) || [];
 
+  const smallNumbers = new Set(['1', '2', '3']);
+
   for (const num of statementNumbers) {
-    if (!userNumbers.includes(num) && !['1', '2', '3'].includes(num)) {
+    if (!userNumbers.includes(num) && !smallNumbers.has(num)) {
       return { isHallucination: true, reason: `number "${num}" not in user message` };
     }
   }
