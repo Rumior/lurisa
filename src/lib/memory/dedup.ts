@@ -99,8 +99,8 @@ export function checkHallucination(statement: string, userMessage: string): { is
   const lowerStatement = statement.toLowerCase();
   const lowerUserMsg = userMessage.toLowerCase();
 
-  const statementNumbers = lowerStatement.match(/\b\d{1,4}\b/g) || [];
-  const userNumbers = lowerUserMsg.match(/\b\d{1,4}\b/g) || [];
+  const statementNumbers: string[] = lowerStatement.match(/\b\d{1,4}\b/g) || [];
+  const userNumbers: string[] = lowerUserMsg.match(/\b\d{1,4}\b/g) || [];
 
   const smallNumbers = new Set(['1', '2', '3']);
 
@@ -110,8 +110,8 @@ export function checkHallucination(statement: string, userMessage: string): { is
     }
   }
 
-  const statementDates = lowerStatement.match(/\b\d{1,2}(?:st|nd|rd|th)\b/g) || [];
-  const userDates = lowerUserMsg.match(/\b\d{1,2}(?:st|nd|rd|th)\b/g) || [];
+  const statementDates: string[] = lowerStatement.match(/\b\d{1,2}(?:st|nd|rd|th)\b/g) || [];
+  const userDates: string[] = lowerUserMsg.match(/\b\d{1,2}(?:st|nd|rd|th)\b/g) || [];
 
   for (const date of statementDates) {
     if (!userDates.includes(date)) {
