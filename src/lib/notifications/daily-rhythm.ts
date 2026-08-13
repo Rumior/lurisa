@@ -1,11 +1,5 @@
-﻿/**
- * Daily Rhythm Engine — Initiative-Scored (Spec §11)
- * Morning check-in and evening reflection now use formal initiative scoring.
- * Time windows define WHEN to evaluate; the score decides IF to send.
- */
-
 import { prisma } from '@/lib/db';
-import { redis, redisKeys } from '@/lib/redis';
+import { redis } from '@/lib/redis';
 import { checkNotificationBudget, incrementNotificationBudget } from '@/lib/follow-up';
 import {
   calculateInitiativeScore,
@@ -15,10 +9,8 @@ import {
 } from '@/lib/initiative/score-engine';
 import { getUserPersonality } from '@/lib/memory/context';
 
-const MORNING_HOUR = 8;   // 8 AM local time
-const EVENING_HOUR = 20;  // 8 PM local time
-const MORNING_WINDOW_MINUTES = 60;
-const EVENING_WINDOW_MINUTES = 60;
+const MORNING_HOUR = 8;
+const EVENING_HOUR = 20;
 
 interface DailyRhythmResult {
   sent: number;
@@ -26,10 +18,6 @@ interface DailyRhythmResult {
   reasons: string[];
 }
 
-/**
- * Process daily rhythm for all users using initiative scoring.
- * Called by the hourly cron job.
- */
 export async function processDailyRhythm(): Promise<DailyRhythmResult> {
   const now = new Date();
   const result: DailyRhythmResult = { sent: 0, skipped: 0, reasons: [] };
@@ -46,34 +34,40 @@ export async function processDailyRhythm(): Promise<DailyRhythmResult> {
       const hoursSinceContact = await getHoursSinceLastContact(user.id);
       const proactivity = await getUserProactivity(user.id);
 
-      // ── MORNING CHECK-IN ──
       if (userLocalHour === MORNING_HOUR) {
         const alreadySent = await wasSentToday(user.id, 'MORNING_CHECKIN');
-        if (!alreadySent) {
-          const budget = await checkNotificationBudget(user.id);
-          if (!budget.canSend) {
-            result.skipped++;
-            result.reasons.push(`User ${user.id}: morning budget exhausted`);
-            continue;
-          }
+        if (alreadySent) {
+          result.skipped++;
+          result.reasons.push(`User ${user.id}: morning rhythm already sent`);
+          continue;
+        }
 
-          // Calculate initiative score
-          const ctx = buildMorningCheckInContext(hoursSinceContact, proactivity);
-          const score = calculateInitiativeScore(ctx);
+        const followUpSent = await wasMorningSentViaFollowUp(user.id);
+        if (followUpSent) {
+          result.skipped++;
+          result.reasons.push(`User ${user.id}: morning already sent via follow-up`);
+          continue;
+        }
 
-          if (shouldInitiate(score, 0.5)) {
-            await sendMorningCheckIn(user.id, user.name);
-            result.sent++;
-          } else {
-            result.skipped++;
-            result.reasons.push(
-              `User ${user.id}: morning score ${score} below threshold (hoursSince=${hoursSinceContact.toFixed(1)}, proactivity=${proactivity})`
-            );
-          }
+        const budget = await checkNotificationBudget(user.id);
+        if (!budget.canSend) {
+          result.skipped++;
+          result.reasons.push(`User ${user.id}: morning budget exhausted`);
+          continue;
+        }
+
+        const ctx = buildMorningCheckInContext(hoursSinceContact, proactivity);
+        const score = calculateInitiativeScore(ctx);
+
+        if (shouldInitiate(score, 0.5)) {
+          await sendMorningCheckIn(user.id, user.name);
+          result.sent++;
+        } else {
+          result.skipped++;
+          result.reasons.push(`User ${user.id}: morning score ${score} below threshold`);
         }
       }
 
-      // ── EVENING REFLECTION ──
       if (userLocalHour === EVENING_HOUR) {
         const alreadySent = await wasSentToday(user.id, 'EVENING_REFLECTION');
         if (!alreadySent) {
@@ -84,7 +78,6 @@ export async function processDailyRhythm(): Promise<DailyRhythmResult> {
             continue;
           }
 
-          // Calculate initiative score
           const ctx = buildEveningReflectionContext(hoursSinceContact, proactivity);
           const score = calculateInitiativeScore(ctx);
 
@@ -93,23 +86,19 @@ export async function processDailyRhythm(): Promise<DailyRhythmResult> {
             result.sent++;
           } else {
             result.skipped++;
-            result.reasons.push(
-              `User ${user.id}: evening score ${score} below threshold (hoursSince=${hoursSinceContact.toFixed(1)}, proactivity=${proactivity})`
-            );
+            result.reasons.push(`User ${user.id}: evening score ${score} below threshold`);
           }
         }
       }
     } catch (err) {
       console.error(`[DAILY RHYTHM] Failed for user ${user.id}:`, err);
       result.skipped++;
-      result.reasons.push(`User ${user.id}: error — ${(err as Error).message}`);
+      result.reasons.push(`User ${user.id}: error`);
     }
   }
 
   return result;
 }
-
-// ── Helpers ──
 
 async function getHoursSinceLastContact(userId: string): Promise<number> {
   const lastMessage = await prisma.messages.findFirst({
@@ -117,7 +106,7 @@ async function getHoursSinceLastContact(userId: string): Promise<number> {
     orderBy: { createdAt: 'desc' },
     select: { createdAt: true },
   });
-  if (!lastMessage) return 48; // New user — high score encourages engagement
+  if (!lastMessage) return 48;
   return (Date.now() - lastMessage.createdAt.getTime()) / (1000 * 60 * 60);
 }
 
@@ -126,7 +115,7 @@ async function getUserProactivity(userId: string): Promise<number> {
     const personality = await getUserPersonality(userId);
     return personality.proactivity;
   } catch {
-    return 0.6; // Default: moderately proactive
+    return 0.6;
   }
 }
 
@@ -147,7 +136,18 @@ async function markSentToday(userId: string, type: string): Promise<void> {
   await redis.setex(key, 24 * 60 * 60, '1');
 }
 
-// ── Senders (unchanged logic, just wrapped) ──
+async function wasMorningSentViaFollowUp(userId: string): Promise<boolean> {
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+  const count = await prisma.notification_log.count({
+    where: {
+      userId,
+      type: 'MORNING_CHECKIN',
+      sentAt: { gte: todayStart },
+    },
+  });
+  return count > 0;
+}
 
 async function sendMorningCheckIn(userId: string, userName: string | null): Promise<void> {
   const recentMemories = await prisma.memories.findMany({
@@ -184,7 +184,7 @@ async function sendMorningCheckIn(userId: string, userName: string | null): Prom
     data: {
       userId,
       type: 'MORNING_CHECKIN',
-      title: 'Good morning ☀️',
+      title: 'Good morning \u2600\uFE0F',
       body,
     },
   });
@@ -236,7 +236,7 @@ async function sendEveningReflection(userId: string, userName: string | null): P
     data: {
       userId,
       type: 'EVENING_REFLECTION',
-      title: 'Evening reflection 🌙',
+      title: 'Evening reflection \uD83C\uDF19',
       body,
     },
   });

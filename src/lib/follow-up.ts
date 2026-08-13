@@ -1,4 +1,4 @@
-﻿import { prisma } from './db';
+import { prisma } from './db';
 import { redis, redisKeys } from './redis';
 import { generateStructuredResponse } from './llm/gateway';
 import {
@@ -227,8 +227,6 @@ Return JSON: {"whatHappened": "...", "sentiment": "positive|negative|neutral|mix
   };
 }
 
-// ── INITIATIVE-SCORED INTENT FIRING (Spec §11) ──
-
 export async function fireDueIntents(): Promise<Array<{ userId: string; intentId: string; actionType: string; score: number; reason?: string }>> {
   const now = new Date();
   const dueIntents = await prisma.scheduled_intents.findMany({
@@ -240,14 +238,27 @@ export async function fireDueIntents(): Promise<Array<{ userId: string; intentId
   const fired: Array<{ userId: string; intentId: string; actionType: string; score: number; reason?: string }> = [];
 
   for (const intent of dueIntents) {
-    // 1. Budget check (hard gate)
     const budget = await checkNotificationBudget(intent.userId);
     if (!budget.canSend) {
       console.log('[FOLLOW-UP] Budget exhausted, skipping intent', intent.id);
       continue;
     }
 
-    // 2. Calculate initiative score
+    if (intent.actionType === 'MORNING_ENCOURAGEMENT') {
+      const alreadySent = await wasMorningSentToday(intent.userId);
+      if (alreadySent) {
+        console.log(`[FOLLOW-UP] Morning already sent via daily rhythm, skipping intent ${intent.id}`);
+        fired.push({
+          userId: intent.userId,
+          intentId: intent.id,
+          actionType: intent.actionType,
+          score: 0,
+          reason: 'morning already sent via daily rhythm',
+        });
+        continue;
+      }
+    }
+
     const hoursSinceContact = await getHoursSinceLastContact(intent.userId);
     const proactivity = await getUserProactivity(intent.userId);
     const memoryImportance = intent.memories?.importance || 0.5;
@@ -276,13 +287,11 @@ export async function fireDueIntents(): Promise<Array<{ userId: string; intentId
         break;
       }
       default: {
-        // Fallback: always fire low-stakes intents
         score = 0.6;
         threshold = 0.5;
       }
     }
 
-    // 3. Score gate (Spec §13: "Silence is part of intelligence")
     if (!shouldInitiate(score, threshold)) {
       console.log(`[FOLLOW-UP] Score ${score} below threshold ${threshold}, staying silent for intent ${intent.id}`);
       fired.push({
@@ -295,7 +304,6 @@ export async function fireDueIntents(): Promise<Array<{ userId: string; intentId
       continue;
     }
 
-    // 4. Fire the intent
     await prisma.scheduled_intents.update({
       where: { id: intent.id },
       data: { status: 'FIRED', firedAt: now },
@@ -317,7 +325,6 @@ export async function fireDueIntents(): Promise<Array<{ userId: string; intentId
     fired.push({ userId: intent.userId, intentId: intent.id, actionType: intent.actionType, score });
     console.log(`[FOLLOW-UP] Fired intent ${intent.id} with score ${score}`);
 
-    // 5. Handle recurrence
     if (intent.recurrenceRule === 'ANNUAL') {
       const nextYear = new Date(intent.triggerAt);
       nextYear.setFullYear(nextYear.getFullYear() + 1);
@@ -346,7 +353,18 @@ export async function fireDueIntents(): Promise<Array<{ userId: string; intentId
   return fired;
 }
 
-// ── Helpers ──
+async function wasMorningSentToday(userId: string): Promise<boolean> {
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+  const count = await prisma.notification_log.count({
+    where: {
+      userId,
+      type: 'MORNING_CHECKIN',
+      sentAt: { gte: todayStart },
+    },
+  });
+  return count > 0;
+}
 
 async function getHoursSinceLastContact(userId: string): Promise<number> {
   const lastMessage = await prisma.messages.findFirst({
@@ -380,7 +398,7 @@ function mapActionToNotificationType(actionType: string): any {
 
 function buildNotificationTitle(intent: any): string {
   switch (intent.actionType) {
-    case 'MORNING_ENCOURAGEMENT': return 'Good morning ☀️';
+    case 'MORNING_ENCOURAGEMENT': return 'Good morning \u2600\uFE0F';
     case 'CHECK_IN_QUESTION': return 'How did it go?';
     case 'ANNIVERSARY_NOTE': return 'A year ago today';
     case 'GOAL_REMINDER': return 'Tomorrow is the day';
