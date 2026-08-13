@@ -5,6 +5,7 @@
  * - Emotion consolidation (same-day emotions merged)
  * - Confidence gating (70% threshold)
  * - Better reinforcement (actual statement merging)
+ * - Cache invalidation for synthesis layer
  */
 
 import OpenAI from 'openai';
@@ -14,6 +15,7 @@ import { scoreMemory } from './scoring';
 import { storeEmbedding } from './embeddings';
 import { createScheduledIntent, checkNotificationBudget } from '@/lib/follow-up';
 import { withRetry } from '@/lib/error-handler';
+import { invalidateSynthesis } from './synthesis';
 
 const groq = new OpenAI({
   apiKey: process.env.GROQ_API_KEY,
@@ -147,6 +149,12 @@ export async function extractMemoriesFromTurn(
           }
           break;
       }
+    }
+
+    if (seenStatements.length > 0) {
+      invalidateSynthesis(userId).catch((err) => {
+        console.error('[SYNTHESIS] Cache invalidation failed:', err);
+      });
     }
 
     console.log(`[MEMORY] Processed ${seenStatements.length} unique memories.`);

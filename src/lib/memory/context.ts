@@ -1,157 +1,99 @@
-import { prisma } from "@/lib/db";
-import { PersonalityDimensions, DEFAULT_PERSONALITY, sanitizePersonality } from "@/lib/personality/config";
-import { MemoryContext } from "@/lib/personality/system-prompt";
-import { generateEmbedding } from "./embeddings";
+﻿import { prisma } from '@/lib/db';
+import { getSynthesizedContext } from './synthesis';
 
-/* ------------------------------------------------------------------ */
-// 1. MEMORY CONTEXT (vector + importance blended)
-/* ------------------------------------------------------------------ */
+export interface MemoryContext {
+  recentFacts: string[];
+  upcomingEvents?: { description: string; date: string }[];
+  activeGoals?: string[];
+  userState?: string;
+  activeThemes?: string[];
+  recentShifts?: string[];
+}
 
 export async function getMemoryContext(
   userId: string,
   currentMessage?: string
 ): Promise<MemoryContext> {
-  let vectorIds: string[] = [];
+  const [synthesis, recentMemories, goals, upcomingEvents] = await Promise.all([
+    getSynthesizedContext(userId),
+    getRecentMemories(userId, 5),
+    getActiveGoals(userId),
+    getUpcomingEvents(userId),
+  ]);
 
-  if (currentMessage && currentMessage.length > 3) {
-    try {
-      const emb = await generateEmbedding(currentMessage);
-      const vec = `[${emb.join(',')}]`;
-      const similar = await prisma.$queryRaw<Array<{ id: string }>>`
-        SELECT m.id
-        FROM memories m
-        JOIN memory_embeddings e ON m.id = e.memoryId
-        WHERE m.userId = ${userId}
-          AND m.status = 'ACTIVE'
-          AND m.importance >= 0.5
-          AND 1 - (e.embedding <=> ${vec}::vector) >= 0.72
-        ORDER BY e.embedding <=> ${vec}::vector
-        LIMIT 5
-      `;
-      vectorIds = similar.map(s => s.id);
-    } catch (e) {
-      console.error('[CONTEXT] Vector search failed:', e);
-    }
+  let relevantFacts: string[] = [];
+  if (currentMessage) {
+    relevantFacts = await getRelevantMemories(userId, currentMessage);
   }
 
-  const vectorMemories = vectorIds.length
-    ? await prisma.memories.findMany({
-        where: { id: { in: vectorIds }, status: 'ACTIVE' },
-        select: { id: true, statement: true, category: true }
-      }).catch(() => [])
-    : [];
-
-  const recentMemories = await prisma.memories.findMany({
-    where: {
-      userId,
-      status: 'ACTIVE',
-      importance: { gte: 0.5 },
-      ...(vectorIds.length ? { id: { notIn: vectorIds } } : {}),
-    },
-    orderBy: [{ importance: 'desc' }, { createdAt: 'desc' }],
-    take: Math.max(0, 5 - vectorMemories.length),
-    select: { statement: true, category: true }
-  }).catch(() => []);
-
-  const allFacts = [
-    ...vectorMemories.map(m => `[${m.category}] ${m.statement}`),
-    ...recentMemories.map(m => `[${m.category}] ${m.statement}`)
-  ].slice(0, 6);
-
   return {
-    recentFacts: allFacts,
-    upcomingEvents: await getUpcomingEvents(userId),
-    activeGoals: await getActiveGoals(userId),
+    recentFacts: relevantFacts.length > 0 ? relevantFacts : recentMemories,
+    upcomingEvents,
+    activeGoals: goals,
+    userState: synthesis.userState,
+    activeThemes: synthesis.activeThemes,
+    recentShifts: synthesis.recentShifts,
   };
 }
 
-/* ------------------------------------------------------------------ */
-// 2. PERSONALITY (restored)
-/* ------------------------------------------------------------------ */
-
-export async function getUserPersonality(userId: string): Promise<PersonalityDimensions> {
-  const pref = await (prisma as any).userPreference?.findUnique({
-    where: { userId },
-  }).catch(() => null);
-
-  if (pref?.personality && typeof pref.personality === "object") {
-    return sanitizePersonality(pref.personality as Partial<PersonalityDimensions>);
-  }
-
-  return DEFAULT_PERSONALITY;
-}
-
-/* ------------------------------------------------------------------ */
-// 3. USER NAME (restored)
-/* ------------------------------------------------------------------ */
-
-export async function getUserName(userId: string): Promise<string | undefined> {
-  const pref = await (prisma as any).userPreference?.findUnique({
-    where: { userId },
-    select: { name: true },
-  }).catch(() => null);
-
-  return pref?.name ?? undefined;
-}
-
-/* ------------------------------------------------------------------ */
-// 4. HELPERS (defensive — won't crash if Prisma model missing)
-/* ------------------------------------------------------------------ */
-
-async function getUpcomingEvents(userId: string): Promise<MemoryContext['upcomingEvents']> {
-  try {
-    const now = new Date();
-    const nextWeek = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
-
-    const scheduledIntentsModel = (prisma as any).scheduled_intents || (prisma as any).scheduledIntents;
-    let intents: any[] = [];
-    if (scheduledIntentsModel?.findMany) {
-      intents = await scheduledIntentsModel.findMany({
-        where: { userId, status: 'PENDING', triggerAt: { gte: now, lte: nextWeek } },
-        orderBy: { triggerAt: 'asc' },
-        take: 5,
-        select: { triggerAt: true, memories: { select: { statement: true } } }
-      });
-    }
-
-    const temps = await prisma.memories.findMany({
-      where: { userId, status: 'ACTIVE', type: 'TEMPORARY', expiresAt: { gte: now } },
-      orderBy: { expiresAt: 'asc' },
-      take: 3,
-      select: { statement: true, expiresAt: true }
-    }).catch(() => []);
-
-    const events = [
-      ...intents.map((i: any) => ({ description: i.memories?.statement || 'Event', date: fmt(i.triggerAt) })),
-      ...temps.map(m => ({ description: m.statement, date: fmt(m.expiresAt!) }))
-    ].slice(0, 5);
-
-    return events;
-  } catch (e) {
-    console.error('[CONTEXT] getUpcomingEvents failed:', e);
-    return [];
-  }
+async function getRecentMemories(userId: string, limit: number): Promise<string[]> {
+  const memories = await prisma.memories.findMany({
+    where: { userId, status: 'ACTIVE' },
+    orderBy: { createdAt: 'desc' },
+    take: limit,
+    select: { statement: true },
+  });
+  return memories.map(m => m.statement);
 }
 
 async function getActiveGoals(userId: string): Promise<string[]> {
-  try {
-    const goals = await prisma.memories.findMany({
-      where: { userId, status: 'ACTIVE', category: 'GOALS' },
-      orderBy: { importance: 'desc' },
-      take: 5,
-      select: { statement: true }
-    });
-    return goals.map(g => g.statement);
-  } catch (e) {
-    console.error('[CONTEXT] getActiveGoals failed:', e);
-    return [];
-  }
+  const goals = await prisma.goals.findMany({
+    where: { userId, status: 'ACTIVE' },
+    orderBy: { createdAt: 'desc' },
+    take: 5,
+    select: { title: true },
+  });
+  return goals.map(g => g.title);
 }
 
-function fmt(d: Date): string {
-  const diff = Math.round((d.getTime() - Date.now()) / (24 * 60 * 60 * 1000));
-  if (diff <= 0) return 'today';
-  if (diff === 1) return 'tomorrow';
-  if (diff < 7) return `in ${diff} days`;
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+async function getUpcomingEvents(userId: string): Promise<{ description: string; date: string }[]> {
+  const events = await prisma.memories.findMany({
+    where: {
+      userId,
+      status: 'ACTIVE',
+      OR: [
+        { statement: { contains: 'tomorrow' } },
+        { statement: { contains: 'next week' } },
+        { statement: { contains: 'interview' } },
+        { statement: { contains: 'meeting' } },
+        { statement: { contains: 'deadline' } },
+      ],
+    },
+    orderBy: { importance: 'desc' },
+    take: 3,
+    select: { statement: true },
+  });
+  return events.map(e => ({ description: e.statement, date: 'upcoming' }));
+}
+
+async function getRelevantMemories(userId: string, message: string): Promise<string[]> {
+  try {
+    const memories = await prisma.memories.findMany({
+      where: { userId, status: 'ACTIVE' },
+      orderBy: { createdAt: 'desc' },
+      take: 20,
+      select: { statement: true, importance: true },
+    });
+    const messageWords = new Set(message.toLowerCase().split(/\s+/).filter(w => w.length > 3));
+    const scored = memories.map(m => {
+      const memWords = m.statement.toLowerCase().split(/\s+/).filter(w => w.length > 3);
+      const overlap = memWords.filter(w => messageWords.has(w)).length;
+      return { statement: m.statement, score: overlap * m.importance };
+    });
+    scored.sort((a, b) => b.score - a.score);
+    return scored.slice(0, 5).map(s => s.statement);
+  } catch (err) {
+    console.error('[MEMORY CONTEXT] Relevance search failed:', err);
+    return [];
+  }
 }

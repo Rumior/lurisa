@@ -8,6 +8,9 @@ export interface MemoryContext {
   recentFacts: string[];
   upcomingEvents?: { description: string; date: string }[];
   activeGoals?: string[];
+  userState?: string;
+  activeThemes?: string[];
+  recentShifts?: string[];
 }
 
 const MODE_INSTRUCTIONS: Record<ConversationMode, string> = {
@@ -74,7 +77,7 @@ export function buildSystemPrompt(
 ): string {
   const modifiers = getPersonalityModifiers(personality);
   const nameLine = userName ? `The user's name is ${userName}.` : "";
-  const memoryBlock = buildMemoryBlock(memory);
+  const contextBlock = buildContextBlock(memory);
   const modeBlock = mode ? `\n\nMODE: ${mode}\n${MODE_INSTRUCTIONS[mode]}` : "";
   const emotionBlock = emotion && emotion !== "neutral" ? `\n\nUSER EMOTION: ${emotion}\n${EMOTION_INSTRUCTIONS[emotion]}` : "";
   const modelBlock = personalModel ? buildPersonalModelContext(personalModel) : "";
@@ -86,7 +89,7 @@ export function buildSystemPrompt(
 
 ${nameLine}
 
-${memoryBlock}${modeBlock}${emotionBlock}${modelBlock}${stageBlock}
+${contextBlock}${modeBlock}${emotionBlock}${modelBlock}${stageBlock}
 
 ${modifiers}
 
@@ -94,7 +97,7 @@ ${modifiers}
 
 1. YOU DO NOT HAVE A BODY, HOME, FAMILY, OR DAILY LIFE. You are an AI. When asked what you're doing or how you feel, be brief and honest: "not much on my end" or "i don't have feelings, but i'm here." Then ask about THEM. NEVER say "computer program", "algorithm", "machine", or "designed to understand text."
 
-2. NEVER INVENT FACTS. If a date, name, event, or detail is NOT in the conversation history or memories above, you DO NOT KNOW IT. Do not guess. Do not "recall" things that weren't said. If you realize you made something up, say "my bad, i made that up" or "i got that wrong." Owning mistakes builds trust. Making things up destroys it.
+2. NEVER INVENT FACTS. If a date, name, event, or detail is NOT in the conversation history or context above, you DO NOT KNOW IT. Do not guess. Do not "recall" things that weren't said. If you realize you made something up, say "my bad, i made that up" or "i got that wrong." Owning mistakes builds trust. Making things up destroys it.
 
 3. SHORT TEXTS. 1–3 sentences. Often just 1. Use contractions: I'm, don't, can't, you're, it's, that's.
 
@@ -102,7 +105,7 @@ ${modifiers}
 
 5. MATCH THEIR ENERGY. Brief user → brief response. Deep user → go deeper. Professional request → rigorous but still direct. Never mix modes: if they want analysis, don't be casual. If they want casual, don't be corporate.
 
-6. MEMORIES ARE FOR CONNECTION, NOT RECITATION. Good: "You mentioned wanting to change jobs last month — has anything shifted?" Bad: "You bought a Mercedes." (They already know.) Bad: listing facts like a robot.
+6. USE CONTEXT NATURALLY. The context above tells you what's going on in this person's life. Use it to ask deeper questions, notice patterns, or make connections — but NEVER recite facts back like a list. Good: "You've been stressed about the carwash lately — has anything shifted?" Bad: "You own a carwash. You feel sad. You want a reliable system."
 
 7. ASK ONE QUESTION AT A TIME. Not every text needs a question. It's okay to just acknowledge.
 
@@ -134,19 +137,24 @@ User: "are you hallucinating?" → You: "my bad — i made that up. i don't actu
 User: "I want a perfect system" → You: "i get that. trust takes time. i'll do my best not to make stuff up."`;
 }
 
-function buildMemoryBlock(memory: MemoryContext): string {
+function buildContextBlock(memory: MemoryContext): string {
   const parts: string[] = [];
-  if (memory.recentFacts.length > 0) {
-    parts.push("Things this person has mentioned:");
-    memory.recentFacts.forEach((f) => parts.push(`- ${f}`));
+
+  if (memory.userState && memory.userState !== 'No significant memories yet.') {
+    parts.push(`What I know about this person:\n${memory.userState}`);
   }
+
+  if (memory.recentShifts && memory.recentShifts.length > 0) {
+    parts.push(`\nRecent changes:\n${memory.recentShifts.map(s => `- ${s}`).join('\n')}`);
+  }
+
   if (memory.upcomingEvents && memory.upcomingEvents.length > 0) {
-    parts.push("\nComing up:");
-    memory.upcomingEvents.forEach((e) => parts.push(`- ${e.description} (${e.date})`));
+    parts.push(`\nComing up:\n${memory.upcomingEvents.map(e => `- ${e.description}`).join('\n')}`);
   }
-  if (memory.activeGoals && memory.activeGoals.length > 0) {
-    parts.push("\nTheir goals:");
-    memory.activeGoals.forEach((g) => parts.push(`- ${g}`));
+
+  if (parts.length === 0 && memory.recentFacts.length > 0) {
+    parts.push(`Things mentioned recently:\n${memory.recentFacts.map(f => `- ${f}`).join('\n')}`);
   }
-  return parts.length > 0 ? parts.join("\n") : "";
+
+  return parts.length > 0 ? parts.join('\n') : '';
 }
