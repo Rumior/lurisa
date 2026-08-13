@@ -36,6 +36,39 @@ export async function getMemoryContext(
   };
 }
 
+export async function getUserPersonality(userId: string): Promise<any> {
+  const user = await prisma.users.findUnique({
+    where: { id: userId },
+    select: {
+      name: true,
+      morningTime: true,
+      eveningTime: true,
+      timezone: true,
+    },
+  });
+
+  return {
+    warmth: 0.7,
+    humor: 0.4,
+    curiosity: 0.8,
+    directness: 0.7,
+    optimism: 0.6,
+    proactivity: 0.6,
+    name: user?.name || null,
+    morningTime: user?.morningTime || '08:00',
+    eveningTime: user?.eveningTime || '20:00',
+    timezone: user?.timezone || 'UTC',
+  };
+}
+
+export async function getUserName(userId: string): Promise<string | undefined> {
+  const user = await prisma.users.findUnique({
+    where: { id: userId },
+    select: { name: true },
+  });
+  return user?.name || undefined;
+}
+
 async function getRecentMemories(userId: string, limit: number): Promise<string[]> {
   const memories = await prisma.memories.findMany({
     where: { userId, status: 'ACTIVE' },
