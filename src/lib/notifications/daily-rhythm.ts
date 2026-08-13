@@ -1,17 +1,23 @@
-/**
- * Daily Rhythm Engine
- * Morning check-in (greeting + one meaningful question)
- * Evening reflection (celebrate progress, capture lessons)
- * Budget-capped (max 3/day), timezone-aware
+﻿/**
+ * Daily Rhythm Engine — Initiative-Scored (Spec §11)
+ * Morning check-in and evening reflection now use formal initiative scoring.
+ * Time windows define WHEN to evaluate; the score decides IF to send.
  */
 
 import { prisma } from '@/lib/db';
 import { redis, redisKeys } from '@/lib/redis';
 import { checkNotificationBudget, incrementNotificationBudget } from '@/lib/follow-up';
+import {
+  calculateInitiativeScore,
+  shouldInitiate,
+  buildMorningCheckInContext,
+  buildEveningReflectionContext,
+} from '@/lib/initiative/score-engine';
+import { getUserPersonality } from '@/lib/memory/context';
 
 const MORNING_HOUR = 8;   // 8 AM local time
 const EVENING_HOUR = 20;  // 8 PM local time
-const MORNING_WINDOW_MINUTES = 60; // Send within 1 hour of target
+const MORNING_WINDOW_MINUTES = 60;
 const EVENING_WINDOW_MINUTES = 60;
 
 interface DailyRhythmResult {
@@ -21,57 +27,75 @@ interface DailyRhythmResult {
 }
 
 /**
- * Process daily rhythm for all users.
+ * Process daily rhythm for all users using initiative scoring.
  * Called by the hourly cron job.
  */
 export async function processDailyRhythm(): Promise<DailyRhythmResult> {
   const now = new Date();
   const result: DailyRhythmResult = { sent: 0, skipped: 0, reasons: [] };
 
-  // Find users who haven't had their daily rhythm processed in the last hour
-  // In production, this should be a cursor-based scan or sharded by user_id
   const users = await prisma.users.findMany({
-    where: {
-      memoryPaused: false,
-    },
-    select: {
-      id: true,
-      name: true,
-      createdAt: true,
-    },
-    take: 500, // Batch size — scale by sharding
+    where: { memoryPaused: false },
+    select: { id: true, name: true, createdAt: true },
+    take: 500,
   });
 
   for (const user of users) {
     try {
       const userLocalHour = getUserLocalHour(user.id, now);
+      const hoursSinceContact = await getHoursSinceLastContact(user.id);
+      const proactivity = await getUserProactivity(user.id);
 
-      // Morning check-in window
+      // ── MORNING CHECK-IN ──
       if (userLocalHour === MORNING_HOUR) {
         const alreadySent = await wasSentToday(user.id, 'MORNING_CHECKIN');
         if (!alreadySent) {
           const budget = await checkNotificationBudget(user.id);
-          if (budget.canSend) {
+          if (!budget.canSend) {
+            result.skipped++;
+            result.reasons.push(`User ${user.id}: morning budget exhausted`);
+            continue;
+          }
+
+          // Calculate initiative score
+          const ctx = buildMorningCheckInContext(hoursSinceContact, proactivity);
+          const score = calculateInitiativeScore(ctx);
+
+          if (shouldInitiate(score, 0.5)) {
             await sendMorningCheckIn(user.id, user.name);
             result.sent++;
           } else {
             result.skipped++;
-            result.reasons.push(`User ${user.id}: morning budget exhausted`);
+            result.reasons.push(
+              `User ${user.id}: morning score ${score} below threshold (hoursSince=${hoursSinceContact.toFixed(1)}, proactivity=${proactivity})`
+            );
           }
         }
       }
 
-      // Evening reflection window
+      // ── EVENING REFLECTION ──
       if (userLocalHour === EVENING_HOUR) {
         const alreadySent = await wasSentToday(user.id, 'EVENING_REFLECTION');
         if (!alreadySent) {
           const budget = await checkNotificationBudget(user.id);
-          if (budget.canSend) {
+          if (!budget.canSend) {
+            result.skipped++;
+            result.reasons.push(`User ${user.id}: evening budget exhausted`);
+            continue;
+          }
+
+          // Calculate initiative score
+          const ctx = buildEveningReflectionContext(hoursSinceContact, proactivity);
+          const score = calculateInitiativeScore(ctx);
+
+          if (shouldInitiate(score, 0.45)) {
             await sendEveningReflection(user.id, user.name);
             result.sent++;
           } else {
             result.skipped++;
-            result.reasons.push(`User ${user.id}: evening budget exhausted`);
+            result.reasons.push(
+              `User ${user.id}: evening score ${score} below threshold (hoursSince=${hoursSinceContact.toFixed(1)}, proactivity=${proactivity})`
+            );
           }
         }
       }
@@ -85,15 +109,28 @@ export async function processDailyRhythm(): Promise<DailyRhythmResult> {
   return result;
 }
 
-/**
- * Get the user's local hour.
- * In production, store timezone in users table (e.g. users.timezone).
- * For now, default to UTC and allow override via Redis.
- */
+// ── Helpers ──
+
+async function getHoursSinceLastContact(userId: string): Promise<number> {
+  const lastMessage = await prisma.messages.findFirst({
+    where: { userId, role: 'USER' },
+    orderBy: { createdAt: 'desc' },
+    select: { createdAt: true },
+  });
+  if (!lastMessage) return 48; // New user — high score encourages engagement
+  return (Date.now() - lastMessage.createdAt.getTime()) / (1000 * 60 * 60);
+}
+
+async function getUserProactivity(userId: string): Promise<number> {
+  try {
+    const personality = await getUserPersonality(userId);
+    return personality.proactivity;
+  } catch {
+    return 0.6; // Default: moderately proactive
+  }
+}
+
 function getUserLocalHour(userId: string, utcDate: Date): number {
-  // TODO: Add `timezone` column to users table for production
-  // const tz = await redis.get(`user:${userId}:timezone`) || 'UTC';
-  // return parseInt(utcDate.toLocaleString('en-US', { timeZone: tz, hour: 'numeric', hour12: false }));
   return utcDate.getUTCHours();
 }
 
@@ -110,8 +147,9 @@ async function markSentToday(userId: string, type: string): Promise<void> {
   await redis.setex(key, 24 * 60 * 60, '1');
 }
 
+// ── Senders (unchanged logic, just wrapped) ──
+
 async function sendMorningCheckIn(userId: string, userName: string | null): Promise<void> {
-  // Pull a meaningful question based on recent memories
   const recentMemories = await prisma.memories.findMany({
     where: {
       userId,
@@ -158,7 +196,6 @@ async function sendMorningCheckIn(userId: string, userName: string | null): Prom
 }
 
 async function sendEveningReflection(userId: string, userName: string | null): Promise<void> {
-  // Pull today's memories and goals progress
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
 
@@ -210,9 +247,6 @@ async function sendEveningReflection(userId: string, userName: string | null): P
   console.log(`[DAILY RHYTHM] Evening reflection sent to ${userId}`);
 }
 
-/**
- * Get user's notification history for the current day.
- */
 export async function getTodayNotifications(userId: string) {
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);

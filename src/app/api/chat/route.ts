@@ -1,6 +1,6 @@
 ﻿import { NextRequest, NextResponse } from 'next/server';
 import { getToken } from 'next-auth/jwt';
-import { generateLurisaResponse } from '@/lib/llm/gateway';
+import { processConversationTurn } from '@/lib/conversation/engine';
 import { extractMemoriesFromTurn } from '@/lib/memory/extraction';
 import { matchIntentToMessage } from '@/lib/follow-up';
 import { buildGoalContext, injectGoalContext } from '@/lib/goals/chat-context';
@@ -10,7 +10,6 @@ import { handleApiError, withRetry } from '@/lib/error-handler';
 
 export async function POST(req: NextRequest) {
   try {
-    // â”€â”€ Auth â”€â”€
     const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
     if (!token?.id) {
       return NextResponse.json(
@@ -19,7 +18,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // â”€â”€ Parse & validate â”€â”€
     let body: { message?: string; conversationId?: string; history?: any[] };
     try {
       body = await req.json();
@@ -45,7 +43,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // â”€â”€ Get or create conversation â”€â”€
     let convId = conversationId;
     if (!convId) {
       const conv = await withRetry(
@@ -61,7 +58,6 @@ export async function POST(req: NextRequest) {
       convId = conv.id;
     }
 
-    // â”€â”€ Store user message â”€â”€
     await withRetry(
       () => prisma.messages.create({
         data: {
@@ -74,9 +70,6 @@ export async function POST(req: NextRequest) {
       { maxRetries: 2, baseDelayMs: 100 }
     );
 
-    // â”€â”€ OPEN-LOOP RESOLUTION (Upgrade 5) â”€â”€
-    // Before treating this as a fresh topic, check if it's a response
-    // to a pending follow-up intent ("How did it go?" â†’ "She said yes!")
     let intentContext = '';
     let intentResolved = false;
 
@@ -94,31 +87,27 @@ export async function POST(req: NextRequest) {
         console.log(`[CHAT] Resolved intent ${match.intentId} for user ${token.id}`);
       }
     } catch (err) {
-      // Intent resolution failure should NOT block the chat
       console.error('[CHAT] Intent resolution error (non-blocking):', err);
     }
 
-    // â”€â”€ Generate response â”€â”€
-    // Fetch full conversation history from DB
     const dbMessages = await prisma.messages.findMany({
       where: { conversationId: convId },
       orderBy: { createdAt: 'asc' },
       select: { role: true, content: true },
     });
+
     const fullHistory = dbMessages.map((m) => ({
       role: m.role.toLowerCase() as 'user' | 'assistant',
       content: m.content,
     }));
 
-    const result = await generateLurisaResponse({
-      message: intentContext ? `${intentContext}
-
-${message}` : message,
+    const result = await processConversationTurn({
+      message: intentContext ? `${intentContext}\n\n${message}` : message,
       userId: token.id,
-      conversationHistory: fullHistory,
+      conversationId: convId,
+      history: fullHistory,
     });
 
-    // â”€â”€ Store assistant message â”€â”€
     await withRetry(
       () => prisma.messages.create({
         data: {
@@ -131,12 +120,10 @@ ${message}` : message,
       { maxRetries: 2, baseDelayMs: 100 }
     );
 
-    // â”€â”€ Async memory extraction (never blocks response) â”€â”€
     extractMemoriesFromTurn(token.id, convId, message, result.response).catch((err) => {
       console.error('[CHAT] Memory extraction error (non-blocking):', err);
     });
 
-    // â”€â”€ Return â”€â”€
     return NextResponse.json({
       response: result.response,
       conversationId: convId,
@@ -145,6 +132,8 @@ ${message}` : message,
         retriesUsed: result.retriesUsed,
         fallback: result.fallback || false,
         intentResolved,
+        mode: result.mode,
+        emotion: result.emotion,
       },
     });
 
@@ -152,4 +141,3 @@ ${message}` : message,
     return handleApiError(error);
   }
 }
-

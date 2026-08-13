@@ -1,12 +1,15 @@
 ﻿/**
- * Memory Extraction Pipeline
- * Now with Follow-Up Engine integration: creates ScheduledIntents for
- * temporal-bearing, high-importance memories (proposal → check-in → anniversary).
+ * Memory Extraction Pipeline v2
+ * - Cross-category deduplication
+ * - Hallucination filtering
+ * - Emotion consolidation (same-day emotions merged)
+ * - Confidence gating (70% threshold)
+ * - Better reinforcement (actual statement merging)
  */
 
 import OpenAI from 'openai';
 import { prisma } from '@/lib/db';
-import { findDuplicateOrRelated } from './dedup';
+import { findDuplicateOrRelated, checkHallucination } from './dedup';
 import { scoreMemory } from './scoring';
 import { storeEmbedding } from './embeddings';
 import { createScheduledIntent, checkNotificationBudget } from '@/lib/follow-up';
@@ -18,6 +21,7 @@ const groq = new OpenAI({
 });
 
 const MODEL = process.env.LURISA_MODEL || 'llama-3.1-8b-instant';
+const CONFIDENCE_THRESHOLD = 0.70;
 
 interface ExtractedMemory {
   statement: string;
@@ -67,12 +71,16 @@ export async function extractMemoriesFromTurn(
       return;
     }
 
+    const highConfidenceMemories = extracted.memories.filter(m => m.confidence >= CONFIDENCE_THRESHOLD);
+    if (highConfidenceMemories.length < extracted.memories.length) {
+      console.log(`[MEMORY] Filtered ${extracted.memories.length - highConfidenceMemories.length} low-confidence memories`);
+    }
+
     const seenStatements: string[] = [];
 
-    for (const mem of extracted.memories) {
+    for (const mem of highConfidenceMemories) {
       const normalized = mem.statement.toLowerCase().trim();
 
-      // Same-turn dedup
       let sameTurnDup = false;
       for (const seen of seenStatements) {
         const a = normalized.split(/\s+/).filter(w => w.length > 3);
@@ -86,59 +94,58 @@ export async function extractMemoriesFromTurn(
       }
       if (sameTurnDup) continue;
 
-      // Database dedup + related-subject check
+      const hallucination = checkHallucination(mem.statement, userMessage);
+      if (hallucination.isHallucination) {
+        console.log('[MEMORY] Hallucination detected, skipping:', mem.statement, '| Reason:', hallucination.reason);
+        continue;
+      }
+
       const dedup = await findDuplicateOrRelated(
         userId,
         mem.statement,
-        mem.temporalMarker,
-        mem.entities,
-        mem.category
+        mem.category,
+        mem.entities
       );
 
-      if (dedup.duplicate) {
-        console.log('[MEMORY] Duplicate found, skipping:', mem.statement);
-        continue;
-      }
+      switch (dedup.action) {
+        case 'SKIP_DUPLICATE':
+          console.log('[MEMORY] Duplicate found, skipping:', mem.statement);
+          continue;
 
-      if (dedup.contradiction && dedup.existingMemoryId) {
-        console.log('[MEMORY] Contradiction found for:', mem.statement);
-        continue;
-      }
+        case 'SKIP_CONTRADICTION':
+          console.log('[MEMORY] Contradiction found, skipping:', mem.statement);
+          continue;
 
-      if (dedup.related && dedup.existingMemoryId) {
-        console.log('[MEMORY] Related subject found, reinforcing:', mem.statement);
-        await reinforceMemory(dedup.existingMemoryId, mem);
-        seenStatements.push(normalized);
-        continue;
-      }
+        case 'SKIP_HALLUCINATION':
+          console.log('[MEMORY] Hallucination flagged, skipping:', mem.statement);
+          continue;
 
-      const memoryId = await processMemory(userId, conversationId, mem);
-      seenStatements.push(normalized);
-
-      // ── FOLLOW-UP ENGINE INTEGRATION ──
-      if (memoryId && mem.temporalMarker) {
-        const intents = buildIntentCandidates(mem);
-        for (const intent of intents) {
-          try {
-            const budget = await checkNotificationBudget(userId);
-            if (!budget.canSend) {
-              console.log('[FOLLOW-UP] Notification budget exhausted for user', userId);
-              break;
-            }
-            await createScheduledIntent({
-              userId,
-              sourceMemoryId: memoryId,
-              triggerType: intent.triggerType,
-              triggerAt: intent.triggerAt,
-              actionType: intent.actionType,
-              expectsResponse: intent.expectsResponse,
-              recurrenceRule: intent.recurrenceRule,
-            });
-            console.log('[FOLLOW-UP] Created intent:', intent.actionType, 'for', mem.statement);
-          } catch (err) {
-            console.error('[FOLLOW-UP] Failed to create intent:', err);
+        case 'REINFORCE':
+        case 'MERGE':
+          if (dedup.existingMemoryId) {
+            console.log('[MEMORY] Reinforcing existing memory:', dedup.reason);
+            await reinforceMemory(dedup.existingMemoryId, mem, userMessage);
+            seenStatements.push(normalized);
           }
-        }
+          continue;
+
+        case 'CREATE':
+          if (mem.category === 'EMOTIONS' || mem.category === 'DAILY_REFLECTIONS') {
+            const merged = await tryMergeEmotion(userId, mem);
+            if (merged) {
+              console.log('[MEMORY] Emotion consolidated into existing memory');
+              seenStatements.push(normalized);
+              continue;
+            }
+          }
+
+          const memoryId = await processMemory(userId, conversationId, mem);
+          seenStatements.push(normalized);
+
+          if (memoryId && mem.temporalMarker) {
+            await createFollowUpIntents(userId, memoryId, mem);
+          }
+          break;
       }
     }
 
@@ -148,29 +155,89 @@ export async function extractMemoriesFromTurn(
   }
 }
 
+async function tryMergeEmotion(userId: string, mem: ExtractedMemory): Promise<boolean> {
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+
+  const existingEmotion = await prisma.memories.findFirst({
+    where: {
+      userId,
+      category: { in: ['EMOTIONS', 'DAILY_REFLECTIONS'] },
+      status: 'ACTIVE',
+      createdAt: { gte: todayStart },
+    },
+    orderBy: { createdAt: 'desc' },
+    select: { id: true, statement: true, importance: true },
+  });
+
+  if (!existingEmotion) return false;
+
+  const existingWords = existingEmotion.statement.toLowerCase().split(/\s+/).filter(w => w.length > 3);
+  const newWords = mem.statement.toLowerCase().split(/\s+/).filter(w => w.length > 3);
+  const common = newWords.filter(w => existingWords.includes(w));
+  const overlap = common.length / Math.max(existingWords.length, newWords.length);
+
+  if (overlap > 0.3) {
+    const mergedStatement = mergeEmotionStatements(existingEmotion.statement, mem.statement);
+    await prisma.memories.update({
+      where: { id: existingEmotion.id },
+      data: {
+        statement: mergedStatement,
+        importance: Math.min(1, Math.max(existingEmotion.importance, mem.importance) + 0.05),
+        reinforcementCount: { increment: 1 },
+        lastReinforcedAt: new Date(),
+        updatedAt: new Date(),
+      },
+    });
+    return true;
+  }
+
+  return false;
+}
+
+function mergeEmotionStatements(existing: string, newStatement: string): string {
+  if (existing.length < 100) {
+    return `${existing} Later, ${newStatement.charAt(0).toLowerCase() + newStatement.slice(1)}`;
+  }
+  return newStatement;
+}
+
+async function createFollowUpIntents(userId: string, memoryId: string, mem: ExtractedMemory): Promise<void> {
+  const intents = buildIntentCandidates(mem);
+  for (const intent of intents) {
+    try {
+      const budget = await checkNotificationBudget(userId);
+      if (!budget.canSend) {
+        console.log('[FOLLOW-UP] Notification budget exhausted for user', userId);
+        break;
+      }
+      await createScheduledIntent({
+        userId,
+        sourceMemoryId: memoryId,
+        triggerType: intent.triggerType,
+        triggerAt: intent.triggerAt,
+        actionType: intent.actionType,
+        expectsResponse: intent.expectsResponse,
+        recurrenceRule: intent.recurrenceRule,
+      });
+      console.log('[FOLLOW-UP] Created intent:', intent.actionType, 'for', mem.statement);
+    } catch (err) {
+      console.error('[FOLLOW-UP] Failed to create intent:', err);
+    }
+  }
+}
+
 function buildIntentCandidates(mem: ExtractedMemory): IntentCandidate[] {
   const intents: IntentCandidate[] = [];
   const now = new Date();
-  const marker = mem.temporalMarker?.toLowerCase(); if (!marker) return intents;
+  const marker = mem.temporalMarker?.toLowerCase();
+  if (!marker) return intents;
 
   const eventDate = parseTemporalMarker(marker, now);
   if (!eventDate) return intents;
 
-  const isHighStakes =
-    mem.importance > 0.7 ||
-    mem.category === 'RELATIONSHIPS' ||
-    mem.category === 'GOALS' ||
-    mem.category === 'CAREER' ||
-    mem.category === 'HEALTH' ||
-    mem.type === 'STORY';
-
-  const isMilestone =
-    mem.category === 'ACHIEVEMENTS' ||
-    mem.category === 'STORIES' ||
-    mem.category === 'RELATIONSHIPS';
-
   const morningOf = new Date(eventDate);
-  morningOf.setHours(5, 0, 0, 0); // 5 AM UTC = 8 AM EAT (+03:00)
+  morningOf.setHours(5, 0, 0, 0);
   if (morningOf > now) {
     intents.push({
       triggerType: 'DATE',
@@ -190,6 +257,11 @@ function buildIntentCandidates(mem: ExtractedMemory): IntentCandidate[] {
       expectsResponse: true,
     });
   }
+
+  const isMilestone =
+    mem.category === 'ACHIEVEMENTS' ||
+    mem.category === 'STORIES' ||
+    mem.category === 'RELATIONSHIPS';
 
   if (isMilestone && mem.importance > 0.6) {
     const anniversary = new Date(eventDate);
@@ -259,11 +331,11 @@ function parseTemporalMarker(marker: string, relativeTo: Date): Date | null {
   return null;
 }
 
-async function reinforceMemory(existingId: string, newMem: ExtractedMemory): Promise<void> {
+async function reinforceMemory(existingId: string, newMem: ExtractedMemory, userMessage: string): Promise<void> {
   try {
     const existing = await prisma.memories.findUnique({
       where: { id: existingId },
-      select: { statement: true, reinforcementCount: true, importance: true }
+      select: { statement: true, reinforcementCount: true, importance: true, category: true }
     });
     if (!existing) return;
 
@@ -271,40 +343,60 @@ async function reinforceMemory(existingId: string, newMem: ExtractedMemory): Pro
     const oldWords = new Set(existing.statement.toLowerCase().split(/\s+/));
     const newWords = new Set(newMem.statement.toLowerCase().split(/\s+/));
 
-    const newIsLonger = newMem.statement.length > existing.statement.length + 5;
+    const newIsLonger = newMem.statement.length > existing.statement.length + 10;
     const oldContainedInNew = Array.from(oldWords).every(w => w.length < 4 || newWords.has(w));
-    const newAddsTemporal = !extractTemporal(existing.statement) && extractTemporal(newMem.statement);
+    const newAddsDetail = Array.from(newWords).filter(w => w.length > 4 && !oldWords.has(w)).length >= 2;
 
-    if ((newIsLonger && oldContainedInNew) || newAddsTemporal) {
+    if (newAddsDetail && !oldContainedInNew) {
+      newStatement = mergeStatements(existing.statement, newMem.statement);
+    } else if (newIsLonger && oldContainedInNew) {
       newStatement = newMem.statement;
     }
+
+    const categoryPriority: Record<string, number> = {
+      CAREER: 3, BUSINESS: 3, GOALS: 3,
+      PROJECTS: 2,
+      EMOTIONS: 3, STORIES: 2, DAILY_REFLECTIONS: 1,
+      PREFERENCES: 2, HABITS: 2, IDENTITY: 1,
+    };
+    const newCategory =
+      (categoryPriority[newMem.category] || 0) > (categoryPriority[existing.category] || 0)
+        ? newMem.category
+        : existing.category;
 
     await prisma.memories.update({
       where: { id: existingId },
       data: {
         statement: newStatement,
+        category: newCategory as any,
         reinforcementCount: { increment: 1 },
         lastReinforcedAt: new Date(),
-        importance: Math.min(1, existing.importance + 0.03),
+        importance: Math.min(1, existing.importance + 0.05),
         updatedAt: new Date(),
       },
     });
 
-    console.log('[MEMORY] Reinforced memory:', existingId);
+    console.log('[MEMORY] Reinforced memory:', existingId, '| New statement:', newStatement.slice(0, 80));
   } catch (err) {
     console.error('[MEMORY] Reinforce failed:', err);
   }
 }
 
-function extractTemporal(text: string): string | null {
-  const markers = ['tomorrow', 'today', 'yesterday', 'next week', 'last week', 'this week',
-    'next month', 'last month', 'monday', 'tuesday', 'wednesday', 'thursday',
-    'friday', 'saturday', 'sunday'];
-  const lower = text.toLowerCase();
-  for (const m of markers) {
-    if (lower.includes(m)) return m;
+function mergeStatements(a: string, b: string): string {
+  const aLower = a.toLowerCase();
+  const bLower = b.toLowerCase();
+
+  if (bLower.includes(aLower)) return b;
+  if (aLower.includes(bLower)) return a;
+
+  const aSubject = a.split(' ').slice(0, 3).join(' ');
+  const bSubject = b.split(' ').slice(0, 3).join(' ');
+
+  if (aSubject.toLowerCase() === bSubject.toLowerCase()) {
+    return `${a} and ${b.charAt(0).toLowerCase() + b.slice(1)}`;
   }
-  return null;
+
+  return b.length > a.length ? b : a;
 }
 
 async function isWorthExtracting(userMsg: string, assistantMsg: string): Promise<boolean> {
@@ -345,11 +437,23 @@ Answer ONLY "yes" or "no".`;
 async function runExtraction(userMsg: string, assistantMsg: string, userName: string = 'User'): Promise<ExtractionResult> {
   const prompt = `You are a memory extraction engine for a personal AI companion. Extract factual memories from the conversation below.
 
-Return a JSON object with this exact shape:
+CRITICAL RULES:
+1. ONLY extract facts ABOUT THE USER (not the assistant).
+2. The user's name is ${userName}. Use "${userName}" instead of "the user" or "User" in every statement.
+3. Transform casual statements into underlying facts. DO NOT quote the user's exact words.
+4. Be concise. One sentence per memory.
+5. NEVER extract vague statements — always specify who, what, where, when.
+6. If the user mentions the same fact twice with different wording, extract it ONCE with the clearest phrasing.
+7. DO NOT invent dates, numbers, or details not explicitly stated by the user.
+8. For emotions: capture the emotion AND the cause (e.g., "${userName} feels stressed about offering credit for car washing").
+9. If nothing worth extracting, return {"memories": []}.
+10. Confidence should reflect certainty: 1.0 = explicitly stated, 0.8 = strongly implied, 0.6 = somewhat implied.
+
+Return JSON:
 {
   "memories": [
     {
-      "statement": "concise factual statement about the user",
+      "statement": "concise factual statement",
       "category": "one of: IDENTITY, RELATIONSHIPS, GOALS, PROJECTS, CAREER, EDUCATION, FINANCE, HEALTH, PREFERENCES, HABITS, TIMELINE, ACHIEVEMENTS, FAILURES, LESSONS, DREAMS, VALUES, STORIES, EMOTIONS, TRAVEL, READING, LEARNING, SKILLS, INTERESTS, DAILY_REFLECTIONS",
       "type": "one of: PERMANENT, LONG_TERM, TEMPORARY, EMOTIONAL, STORY",
       "confidence": 0.0-1.0,
@@ -360,24 +464,12 @@ Return a JSON object with this exact shape:
   ]
 }
 
-Rules:
-- Only extract facts ABOUT THE USER (not the assistant).
-- The user's name is ${userName}. Use "${userName}" instead of "the user" or "User" in every statement.
-- Transform casual statements into underlying facts. DO NOT quote the user's exact words as the memory.
-- Be concise. One sentence per memory.
-
 Examples of correct transformations:
-  User says: "my sister is calling me" → Extract: {"statement": "${userName} has a sister", "category": "RELATIONSHIPS"}
-  User says: "she bought a dog called rex today" → Extract: {"statement": "${userName} bought a dog named Rex", "category": "PREFERENCES"}
-  User says: "I have an interview at Google tomorrow" → Extract: {"statement": "${userName} has an interview at Google tomorrow", "category": "CAREER", "temporalMarker": "tomorrow"}
-  User says: "I live in Nairobi" → Extract: {"statement": "${userName} lives in Nairobi", "category": "IDENTITY"}
-  User says: "I'm feeling stressed about work" → Extract: {"statement": "${userName} feels stressed about work", "category": "EMOTIONS"}
-
-- Include the company name, person name, or specific location in EVERY statement.
-- Include the date or time reference in EVERY statement when mentioned (e.g., "tomorrow", "Friday", "next week").
-- NEVER extract vague statements like "${userName} has an interview" — always specify who, where, and when.
-- If the user mentions the same fact twice with slightly different wording, extract it ONCE.
-- If nothing worth extracting, return {"memories": []}.
+  "my sister is calling me" → {"statement": "${userName} has a sister", "category": "RELATIONSHIPS"}
+  "she bought a dog called rex today" → {"statement": "${userName} bought a dog named Rex", "category": "PREFERENCES"}
+  "I have an interview at Google tomorrow" → {"statement": "${userName} has an interview at Google tomorrow", "category": "CAREER", "temporalMarker": "tomorrow"}
+  "I'm feeling stressed about work" → {"statement": "${userName} feels stressed about work", "category": "EMOTIONS"}
+  "I want to start a carwash business" → {"statement": "${userName} wants to start a carwash business", "category": "GOALS"}
 
 CONVERSATION:
 User: "${userMsg}"

@@ -311,9 +311,6 @@ model users {
   memoryPaused          Boolean                 @default(false)
   passwordHash          String?
   updatedAt             DateTime                @updatedAt
-  timezone              String?                 @default("UTC")
-  morningTime           String?                 @default("08:00")
-  eveningTime           String?                 @default("20:00")
   accounts              accounts[]
   conversations         conversations[]
   devices               devices[]
@@ -323,12 +320,13 @@ model users {
   memory_edits          memory_edits[]
   notification_log      notification_log[]
   pending_confirmations pending_confirmations[]
-  push_subscriptions    push_subscriptions[]
   scheduled_intents     scheduled_intents[]
   sessions              sessions[]
   timeline_events       timeline_events[]
-  user_personal_models  user_personal_models?
-  relationship_stages   relationship_stages?
+timezone    String?  @default("UTC")
+  morningTime String?  @default("08:00")
+  eveningTime String?  @default("20:00")
+  push_subscriptions push_subscriptions[]
 
   @@index([email])
 }
@@ -339,59 +337,6 @@ model verification_tokens {
   expires    DateTime
 
   @@unique([identifier, token])
-}
-
-model user_personal_models {
-  id                      String   @id @default(uuid())
-  userId                  String   @unique
-  communicationStyle      String?
-  communicationConfidence Float    @default(0)
-  decisionMaking          String?
-  decisionConfidence      Float    @default(0)
-  workInterests           String?
-  workConfidence          Float    @default(0)
-  currentGoalsSummary     String?
-  goalsConfidence         Float    @default(0)
-  recurringConcerns       String?
-  concernsConfidence      Float    @default(0)
-  preferredInteraction    String?
-  interactionConfidence   Float    @default(0)
-  lifePhase               String?
-  lifePhaseConfidence     Float    @default(0)
-  importantRelationships  String?
-  relationshipsConfidence Float    @default(0)
-  createdAt               DateTime @default(now())
-  updatedAt               DateTime @updatedAt
-  users                   users    @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
-}
-
-model relationship_stages {
-  id                String   @id @default(uuid())
-  userId            String   @unique
-  stage             String   @default("NEW")
-  firstContactAt    DateTime @default(now())
-  messageCount      Int      @default(0)
-  memoryCount       Int      @default(0)
-  lastInteractionAt DateTime @default(now())
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
-  users             users    @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
-}
-
-model push_subscriptions {
-  id        String   @id @default(uuid())
-  userId    String
-  endpoint  String   @unique
-  p256dh    String
-  auth      String
-  createdAt DateTime @default(now())
-  users     users    @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
 }
 
 enum ActionType {
@@ -495,4 +440,16 @@ enum TriggerType {
   DATE
   RELATIVE
   RECURRENCE
+}
+
+model push_subscriptions {
+  id        String   @id @default(uuid())
+  userId    String
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now())
+  users     users    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }

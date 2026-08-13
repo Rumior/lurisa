@@ -1,6 +1,14 @@
 ﻿import { prisma } from './db';
 import { redis, redisKeys } from './redis';
 import { generateStructuredResponse } from './llm/gateway';
+import {
+  calculateInitiativeScore,
+  shouldInitiate,
+  buildFollowUpContext,
+  buildAnniversaryContext,
+  buildMorningCheckInContext,
+} from '@/lib/initiative/score-engine';
+import { getUserPersonality } from '@/lib/memory/context';
 
 interface IntentCreationParams {
   userId: string;
@@ -219,7 +227,9 @@ Return JSON: {"whatHappened": "...", "sentiment": "positive|negative|neutral|mix
   };
 }
 
-export async function fireDueIntents(): Promise<Array<{ userId: string; intentId: string; actionType: string }>> {
+// ── INITIATIVE-SCORED INTENT FIRING (Spec §11) ──
+
+export async function fireDueIntents(): Promise<Array<{ userId: string; intentId: string; actionType: string; score: number; reason?: string }>> {
   const now = new Date();
   const dueIntents = await prisma.scheduled_intents.findMany({
     where: { status: 'PENDING', triggerAt: { lte: now } },
@@ -227,15 +237,65 @@ export async function fireDueIntents(): Promise<Array<{ userId: string; intentId
     include: { memories: { select: { statement: true, importance: true, category: true } } },
   });
 
-  const fired: Array<{ userId: string; intentId: string; actionType: string }> = [];
+  const fired: Array<{ userId: string; intentId: string; actionType: string; score: number; reason?: string }> = [];
 
   for (const intent of dueIntents) {
+    // 1. Budget check (hard gate)
     const budget = await checkNotificationBudget(intent.userId);
     if (!budget.canSend) {
       console.log('[FOLLOW-UP] Budget exhausted, skipping intent', intent.id);
       continue;
     }
 
+    // 2. Calculate initiative score
+    const hoursSinceContact = await getHoursSinceLastContact(intent.userId);
+    const proactivity = await getUserProactivity(intent.userId);
+    const memoryImportance = intent.memories?.importance || 0.5;
+
+    let score = 0;
+    let threshold = 0.55;
+
+    switch (intent.actionType) {
+      case 'CHECK_IN_QUESTION':
+      case 'GOAL_REMINDER': {
+        const ctx = buildFollowUpContext(memoryImportance, hoursSinceContact, proactivity);
+        score = calculateInitiativeScore(ctx);
+        threshold = 0.55;
+        break;
+      }
+      case 'ANNIVERSARY_NOTE': {
+        const ctx = buildAnniversaryContext(hoursSinceContact, proactivity);
+        score = calculateInitiativeScore(ctx);
+        threshold = 0.5;
+        break;
+      }
+      case 'MORNING_ENCOURAGEMENT': {
+        const ctx = buildMorningCheckInContext(hoursSinceContact, proactivity);
+        score = calculateInitiativeScore(ctx);
+        threshold = 0.5;
+        break;
+      }
+      default: {
+        // Fallback: always fire low-stakes intents
+        score = 0.6;
+        threshold = 0.5;
+      }
+    }
+
+    // 3. Score gate (Spec §13: "Silence is part of intelligence")
+    if (!shouldInitiate(score, threshold)) {
+      console.log(`[FOLLOW-UP] Score ${score} below threshold ${threshold}, staying silent for intent ${intent.id}`);
+      fired.push({
+        userId: intent.userId,
+        intentId: intent.id,
+        actionType: intent.actionType,
+        score,
+        reason: `score ${score} < threshold ${threshold}`,
+      });
+      continue;
+    }
+
+    // 4. Fire the intent
     await prisma.scheduled_intents.update({
       where: { id: intent.id },
       data: { status: 'FIRED', firedAt: now },
@@ -254,8 +314,10 @@ export async function fireDueIntents(): Promise<Array<{ userId: string; intentId
       },
     });
 
-    fired.push({ userId: intent.userId, intentId: intent.id, actionType: intent.actionType });
+    fired.push({ userId: intent.userId, intentId: intent.id, actionType: intent.actionType, score });
+    console.log(`[FOLLOW-UP] Fired intent ${intent.id} with score ${score}`);
 
+    // 5. Handle recurrence
     if (intent.recurrenceRule === 'ANNUAL') {
       const nextYear = new Date(intent.triggerAt);
       nextYear.setFullYear(nextYear.getFullYear() + 1);
@@ -284,6 +346,27 @@ export async function fireDueIntents(): Promise<Array<{ userId: string; intentId
   return fired;
 }
 
+// ── Helpers ──
+
+async function getHoursSinceLastContact(userId: string): Promise<number> {
+  const lastMessage = await prisma.messages.findFirst({
+    where: { userId, role: 'USER' },
+    orderBy: { createdAt: 'desc' },
+    select: { createdAt: true },
+  });
+  if (!lastMessage) return 48;
+  return (Date.now() - lastMessage.createdAt.getTime()) / (1000 * 60 * 60);
+}
+
+async function getUserProactivity(userId: string): Promise<number> {
+  try {
+    const personality = await getUserPersonality(userId);
+    return personality.proactivity;
+  } catch {
+    return 0.6;
+  }
+}
+
 function mapActionToNotificationType(actionType: string): any {
   switch (actionType) {
     case 'MORNING_ENCOURAGEMENT': return 'MORNING_CHECKIN';
@@ -297,7 +380,7 @@ function mapActionToNotificationType(actionType: string): any {
 
 function buildNotificationTitle(intent: any): string {
   switch (intent.actionType) {
-    case 'MORNING_ENCOURAGEMENT': return 'Good morning â˜€ï¸';
+    case 'MORNING_ENCOURAGEMENT': return 'Good morning ☀️';
     case 'CHECK_IN_QUESTION': return 'How did it go?';
     case 'ANNIVERSARY_NOTE': return 'A year ago today';
     case 'GOAL_REMINDER': return 'Tomorrow is the day';
@@ -311,7 +394,7 @@ function buildNotificationBody(intent: any): string {
     case 'MORNING_ENCOURAGEMENT': return `You mentioned ${stmt.toLowerCase()}. You've got this.`;
     case 'CHECK_IN_QUESTION': return `You said ${stmt.toLowerCase()}. How did it go?`;
     case 'ANNIVERSARY_NOTE': return `A year ago: ${stmt}`;
-    case 'GOAL_REMINDER': return `Just a heads up â€” ${stmt.toLowerCase()} is tomorrow.`;
+    case 'GOAL_REMINDER': return `Just a heads up — ${stmt.toLowerCase()} is tomorrow.`;
     default: return stmt;
   }
 }
