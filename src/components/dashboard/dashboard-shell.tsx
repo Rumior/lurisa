@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
@@ -30,10 +30,20 @@ export function DashboardShell({ user, children }: DashboardShellProps) {
   const { theme, setTheme } = useTheme();
 
   useEffect(() => {
-    fetch('/api/notifications/unread')
-      .then(r => r.ok ? r.json() : { count: 0 })
-      .then(data => setUnreadCount(data.count || 0))
-      .catch(() => setUnreadCount(0));
+    function fetchCount() {
+      fetch('/api/notifications/unread')
+        .then(r => r.ok ? r.json() : { count: 0 })
+        .then(data => setUnreadCount(data.count || 0))
+        .catch(() => setUnreadCount(0));
+    }
+    fetchCount();
+    const interval = setInterval(fetchCount, 30000);
+    const handler = () => fetchCount();
+    window.addEventListener('notifications:refresh', handler);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('notifications:refresh', handler);
+    };
   }, []);
 
   return (
