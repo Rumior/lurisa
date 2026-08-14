@@ -1,0 +1,571 @@
+﻿
+FullName                                                                                           Length 
+--------                                                                                           ------ 
+C:\Users\HP\Desktop\lurisa\.github                                                                        
+C:\Users\HP\Desktop\lurisa\.github\workflows                                                              
+C:\Users\HP\Desktop\lurisa\.github\workflows\cron.yml                                              362    
+C:\Users\HP\Desktop\lurisa\.next                                                                          
+C:\Users\HP\Desktop\lurisa\.next\cache                                                                    
+C:\Users\HP\Desktop\lurisa\.next\cache\swc                                                                
+C:\Users\HP\Desktop\lurisa\.next\cache\swc\plugins                                                        
+C:\Users\HP\Desktop\lurisa\.next\cache\swc\plugins\v7_windows_x86_64_0.106.15                             
+C:\Users\HP\Desktop\lurisa\.next\cache\webpack                                                            
+C:\Users\HP\Desktop\lurisa\.next\cache\webpack\client-development                                         
+C:\Users\HP\Desktop\lurisa\.next\cache\webpack\client-development\0.pack.gz                        5281   
+C:\Users\HP\Desktop\lurisa\.next\cache\webpack\client-development\1.pack.gz                        839136 
+C:\Users\HP\Desktop\lurisa\.next\cache\webpack\client-development\10.pack.gz                       253409 
+C:\Users\HP\Desktop\lurisa\.next\cache\webpack\client-development\11.pack.gz                       442757 
+C:\Users\HP\Desktop\lurisa\.next\cache\webpack\client-development\12.pack.gz                       484366 
+C:\Users\HP\Desktop\lurisa\.next\cache\webpack\client-development\13.pack.gz                       555033 
+C:\Users\HP\Desktop\lurisa\.next\cache\webpack\client-development\14.pack.gz                       700481 
+C:\Users\HP\Desktop\lurisa\.next\cache\webpack\client-development\15.pack.gz                       853553 
+C:\Users\HP\Desktop\lurisa\.next\cache\webpack\client-development\2.pack.gz                        498768 
+C:\Users\HP\Desktop\lurisa\.next\cache\webpack\client-development\3.pack.gz                        474229 
+C:\Users\HP\Desktop\lurisa\.next\cache\webpack\client-development\4.pack.gz                        791657 
+C:\Users\HP\Desktop\lurisa\.next\cache\webpack\client-development\5.pack.gz                        9714111
+C:\Users\HP\Desktop\lurisa\.next\cache\webpack\client-development\6.pack.gz                        493344 
+C:\Users\HP\Desktop\lurisa\.next\cache\webpack\client-development\7.pack.gz                        7602   
+C:\Users\HP\Desktop\lurisa\.next\cache\webpack\client-development\8.pack.gz                        11630  
+C:\Users\HP\Desktop\lurisa\.next\cache\webpack\client-development\9.pack.gz                        69669  
+C:\Users\HP\Desktop\lurisa\.next\cache\webpack\client-development\index.pack.gz                    175715 
+C:\Users\HP\Desktop\lurisa\.next\cache\webpack\client-development\index.pack.gz.old                174692 
+C:\Users\HP\Desktop\lurisa\.next\cache\webpack\edge-server-development                                    
+C:\Users\HP\Desktop\lurisa\.next\cache\webpack\edge-server-development\0.pack.gz                   527060 
+C:\Users\HP\Desktop\lurisa\.next\cache\webpack\edge-server-development\1.pack.gz                   954159 
+C:\Users\HP\Desktop\lurisa\.next\cache\webpack\edge-server-development\index.pack.gz               73629  
+C:\Users\HP\Desktop\lurisa\.next\cache\webpack\edge-server-development\index.pack.gz.old           72883  
+C:\Users\HP\Desktop\lurisa\.next\cache\webpack\server-development                                         
+C:\Users\HP\Desktop\lurisa\.next\cache\webpack\server-development\0.pack.gz                        206912 
+C:\Users\HP\Desktop\lurisa\.next\cache\webpack\server-development\1.pack.gz                        36855  
+C:\Users\HP\Desktop\lurisa\.next\cache\webpack\server-development\10.pack.gz                       3792399
+C:\Users\HP\Desktop\lurisa\.next\cache\webpack\server-development\11.pack.gz                       581396 
+C:\Users\HP\Desktop\lurisa\.next\cache\webpack\server-development\12.pack.gz                       93617  
+C:\Users\HP\Desktop\lurisa\.next\cache\webpack\server-development\13.pack.gz                       401307 
+C:\Users\HP\Desktop\lurisa\.next\cache\webpack\server-development\14.pack.gz                       113844 
+C:\Users\HP\Desktop\lurisa\.next\cache\webpack\server-development\15.pack.gz                       342917 
+C:\Users\HP\Desktop\lurisa\.next\cache\webpack\server-development\16.pack.gz                       33628  
+C:\Users\HP\Desktop\lurisa\.next\cache\webpack\server-development\17.pack.gz                       307403 
+C:\Users\HP\Desktop\lurisa\.next\cache\webpack\server-development\18.pack.gz                       778    
+C:\Users\HP\Desktop\lurisa\.next\cache\webpack\server-development\19.pack.gz                       4005792
+C:\Users\HP\Desktop\lurisa\.next\cache\webpack\server-development\2.pack.gz                        1711887
+C:\Users\HP\Desktop\lurisa\.next\cache\webpack\server-development\20.pack.gz                       24803  
+C:\Users\HP\Desktop\lurisa\.next\cache\webpack\server-development\21.pack.gz                       355484 
+C:\Users\HP\Desktop\lurisa\.next\cache\webpack\server-development\22.pack.gz                       776304 
+C:\Users\HP\Desktop\lurisa\.next\cache\webpack\server-development\23.pack.gz                       83406  
+C:\Users\HP\Desktop\lurisa\.next\cache\webpack\server-development\24.pack.gz                       102225 
+C:\Users\HP\Desktop\lurisa\.next\cache\webpack\server-development\3.pack.gz                        178027 
+C:\Users\HP\Desktop\lurisa\.next\cache\webpack\server-development\4.pack.gz                        22984  
+C:\Users\HP\Desktop\lurisa\.next\cache\webpack\server-development\5.pack.gz                        1498   
+C:\Users\HP\Desktop\lurisa\.next\cache\webpack\server-development\6.pack.gz                        154049 
+C:\Users\HP\Desktop\lurisa\.next\cache\webpack\server-development\7.pack.gz                        6618   
+C:\Users\HP\Desktop\lurisa\.next\cache\webpack\server-development\8.pack.gz                        1491508
+C:\Users\HP\Desktop\lurisa\.next\cache\webpack\server-development\9.pack.gz                        215466 
+C:\Users\HP\Desktop\lurisa\.next\cache\webpack\server-development\index.pack.gz                    484437 
+C:\Users\HP\Desktop\lurisa\.next\cache\webpack\server-development\index.pack.gz.old                480011 
+C:\Users\HP\Desktop\lurisa\.next\server                                                                   
+C:\Users\HP\Desktop\lurisa\.next\server\app                                                               
+C:\Users\HP\Desktop\lurisa\.next\server\app\(auth)                                                        
+C:\Users\HP\Desktop\lurisa\.next\server\app\(auth)\login                                                  
+C:\Users\HP\Desktop\lurisa\.next\server\app\(auth)\login\page.js                                   129805 
+C:\Users\HP\Desktop\lurisa\.next\server\app\(auth)\login\page_client-reference-manifest.js         9495   
+C:\Users\HP\Desktop\lurisa\.next\server\app\(dashboard)                                                   
+C:\Users\HP\Desktop\lurisa\.next\server\app\(dashboard)\chat                                              
+C:\Users\HP\Desktop\lurisa\.next\server\app\(dashboard)\chat\page.js                               298439 
+C:\Users\HP\Desktop\lurisa\.next\server\app\(dashboard)\chat\page_client-reference-manifest.js     9511   
+C:\Users\HP\Desktop\lurisa\.next\server\app\(dashboard)\research                                          
+C:\Users\HP\Desktop\lurisa\.next\server\app\(dashboard)\research\page.js                           405235 
+C:\Users\HP\Desktop\lurisa\.next\server\app\(dashboard)\research\page_client-reference-manifest.js 9527   
+C:\Users\HP\Desktop\lurisa\.next\server\app\api                                                           
+C:\Users\HP\Desktop\lurisa\.next\server\app\api\auth                                                      
+C:\Users\HP\Desktop\lurisa\.next\server\app\api\auth\[...nextauth]                                        
+C:\Users\HP\Desktop\lurisa\.next\server\app\api\auth\[...nextauth]\route.js                        83971  
+C:\Users\HP\Desktop\lurisa\.next\server\app\api\chat                                                      
+C:\Users\HP\Desktop\lurisa\.next\server\app\api\chat\proactive                                            
+C:\Users\HP\Desktop\lurisa\.next\server\app\api\chat\proactive\route.js                            59350  
+C:\Users\HP\Desktop\lurisa\.next\server\app\api\dashboard                                                 
+C:\Users\HP\Desktop\lurisa\.next\server\app\api\dashboard\route.js                                 85200  
+C:\Users\HP\Desktop\lurisa\.next\server\app\api\notifications                                             
+C:\Users\HP\Desktop\lurisa\.next\server\app\api\notifications\unread                                      
+C:\Users\HP\Desktop\lurisa\.next\server\app\api\notifications\unread\route.js                      86502  
+C:\Users\HP\Desktop\lurisa\.next\server\app\api\research                                                  
+C:\Users\HP\Desktop\lurisa\.next\server\app\api\research\route.js                                  321652 
+C:\Users\HP\Desktop\lurisa\.next\server\app\page.js                                                247198 
+C:\Users\HP\Desktop\lurisa\.next\server\app\page_client-reference-manifest.js                      9351   
+C:\Users\HP\Desktop\lurisa\.next\server\src                                                               
+C:\Users\HP\Desktop\lurisa\.next\server\src\middleware.js                                          1373087
+C:\Users\HP\Desktop\lurisa\.next\server\static                                                            
+C:\Users\HP\Desktop\lurisa\.next\server\static\webpack                                                    
+C:\Users\HP\Desktop\lurisa\.next\server\static\webpack\633457081244afec._.hot-update.json          22     
+C:\Users\HP\Desktop\lurisa\.next\server\vendor-chunks                                                     
+C:\Users\HP\Desktop\lurisa\.next\server\vendor-chunks\@babel.js                                    167642 
+C:\Users\HP\Desktop\lurisa\.next\server\vendor-chunks\@ioredis.js                                  47064  
+C:\Users\HP\Desktop\lurisa\.next\server\vendor-chunks\@opentelemetry.js                            233638 
+C:\Users\HP\Desktop\lurisa\.next\server\vendor-chunks\@panva.js                                    12264  
+C:\Users\HP\Desktop\lurisa\.next\server\vendor-chunks\@swc.js                                      13921  
+C:\Users\HP\Desktop\lurisa\.next\server\vendor-chunks\bcryptjs.js                                  157822 
+C:\Users\HP\Desktop\lurisa\.next\server\vendor-chunks\class-variance-authority.js                  9760   
+C:\Users\HP\Desktop\lurisa\.next\server\vendor-chunks\clsx.js                                      2800   
+C:\Users\HP\Desktop\lurisa\.next\server\vendor-chunks\cluster-key-slot.js                          18474  
+C:\Users\HP\Desktop\lurisa\.next\server\vendor-chunks\cookie.js                                    23706  
+C:\Users\HP\Desktop\lurisa\.next\server\vendor-chunks\debug.js                                     56618  
+C:\Users\HP\Desktop\lurisa\.next\server\vendor-chunks\denque.js                                    35039  
+C:\Users\HP\Desktop\lurisa\.next\server\vendor-chunks\has-flag.js                                  2157   
+C:\Users\HP\Desktop\lurisa\.next\server\vendor-chunks\ioredis.js                                   678709 
+C:\Users\HP\Desktop\lurisa\.next\server\vendor-chunks\lru-cache.js                                 23423  
+C:\Users\HP\Desktop\lurisa\.next\server\vendor-chunks\lucide-react.js                              166162 
+C:\Users\HP\Desktop\lurisa\.next\server\vendor-chunks\ms.js                                        9837   
+C:\Users\HP\Desktop\lurisa\.next\server\vendor-chunks\next-auth.js                                 1203907
+C:\Users\HP\Desktop\lurisa\.next\server\vendor-chunks\next-themes.js                               20259  
+C:\Users\HP\Desktop\lurisa\.next\server\vendor-chunks\next.js                                      2187519
+C:\Users\HP\Desktop\lurisa\.next\server\vendor-chunks\oauth.js                                     104460 
+C:\Users\HP\Desktop\lurisa\.next\server\vendor-chunks\object-hash.js                               41373  
+C:\Users\HP\Desktop\lurisa\.next\server\vendor-chunks\oidc-token-hash.js                           10337  
+C:\Users\HP\Desktop\lurisa\.next\server\vendor-chunks\openai.js                                    1653552
+C:\Users\HP\Desktop\lurisa\.next\server\vendor-chunks\openid-client.js                             963105 
+C:\Users\HP\Desktop\lurisa\.next\server\vendor-chunks\preact-render-to-string.js                   24454  
+C:\Users\HP\Desktop\lurisa\.next\server\vendor-chunks\preact.js                                    31555  
+C:\Users\HP\Desktop\lurisa\.next\server\vendor-chunks\redis-errors.js                              13270  
+C:\Users\HP\Desktop\lurisa\.next\server\vendor-chunks\redis-parser.js                              41522  
+C:\Users\HP\Desktop\lurisa\.next\server\vendor-chunks\standard-as-callback.js                      7674   
+C:\Users\HP\Desktop\lurisa\.next\server\vendor-chunks\supports-color.js                            9513   
+C:\Users\HP\Desktop\lurisa\.next\server\vendor-chunks\tailwind-merge.js                            200516 
+C:\Users\HP\Desktop\lurisa\.next\server\vendor-chunks\yallist.js                                   26311  
+C:\Users\HP\Desktop\lurisa\.next\server\vendor-chunks\zod.js                                       440306 
+C:\Users\HP\Desktop\lurisa\.next\server\app-paths-manifest.json                                    536    
+C:\Users\HP\Desktop\lurisa\.next\server\edge-runtime-webpack.js                                    44732  
+C:\Users\HP\Desktop\lurisa\.next\server\interception-route-rewrite-manifest.js                     47     
+C:\Users\HP\Desktop\lurisa\.next\server\middleware-build-manifest.js                               474    
+C:\Users\HP\Desktop\lurisa\.next\server\middleware-manifest.json                                   580    
+C:\Users\HP\Desktop\lurisa\.next\server\middleware-react-loadable-manifest.js                      35     
+C:\Users\HP\Desktop\lurisa\.next\server\next-font-manifest.js                                      113    
+C:\Users\HP\Desktop\lurisa\.next\server\next-font-manifest.json                                    77     
+C:\Users\HP\Desktop\lurisa\.next\server\pages-manifest.json                                        2      
+C:\Users\HP\Desktop\lurisa\.next\server\server-reference-manifest.js                               140    
+C:\Users\HP\Desktop\lurisa\.next\server\server-reference-manifest.json                             97     
+C:\Users\HP\Desktop\lurisa\.next\server\webpack-runtime.js                                         8821   
+C:\Users\HP\Desktop\lurisa\.next\static                                                                   
+C:\Users\HP\Desktop\lurisa\.next\static\chunks                                                            
+C:\Users\HP\Desktop\lurisa\.next\static\chunks\app                                                        
+C:\Users\HP\Desktop\lurisa\.next\static\chunks\app\(auth)                                                 
+C:\Users\HP\Desktop\lurisa\.next\static\chunks\app\(auth)\login                                           
+C:\Users\HP\Desktop\lurisa\.next\static\chunks\app\(auth)\login\page.js                            901572 
+C:\Users\HP\Desktop\lurisa\.next\static\chunks\app\(auth)\layout.js                                1707   
+C:\Users\HP\Desktop\lurisa\.next\static\chunks\app\(dashboard)                                            
+C:\Users\HP\Desktop\lurisa\.next\static\chunks\app\(dashboard)\chat                                       
+C:\Users\HP\Desktop\lurisa\.next\static\chunks\app\(dashboard)\chat\page.js                        466761 
+C:\Users\HP\Desktop\lurisa\.next\static\chunks\app\(dashboard)\research                                   
+C:\Users\HP\Desktop\lurisa\.next\static\chunks\app\(dashboard)\research\page.js                    445429 
+C:\Users\HP\Desktop\lurisa\.next\static\chunks\app\(dashboard)\layout.js                           956190 
+C:\Users\HP\Desktop\lurisa\.next\static\chunks\app\layout.js                                       407536 
+C:\Users\HP\Desktop\lurisa\.next\static\chunks\app\page.js                                         541855 
+C:\Users\HP\Desktop\lurisa\.next\static\chunks\app-pages-internals.js                              133803 
+C:\Users\HP\Desktop\lurisa\.next\static\chunks\main-app.js                                         6034944
+C:\Users\HP\Desktop\lurisa\.next\static\chunks\polyfills.js                                        112594 
+C:\Users\HP\Desktop\lurisa\.next\static\chunks\webpack.js                                          56325  
+C:\Users\HP\Desktop\lurisa\.next\static\css                                                               
+C:\Users\HP\Desktop\lurisa\.next\static\css\app                                                           
+C:\Users\HP\Desktop\lurisa\.next\static\css\app\layout.css                                         63749  
+C:\Users\HP\Desktop\lurisa\.next\static\development                                                       
+C:\Users\HP\Desktop\lurisa\.next\static\development\_buildManifest.js                              161    
+C:\Users\HP\Desktop\lurisa\.next\static\development\_ssgManifest.js                                76     
+C:\Users\HP\Desktop\lurisa\.next\static\media                                                             
+C:\Users\HP\Desktop\lurisa\.next\static\media\19cfc7226ec3afaa-s.woff2                             19044  
+C:\Users\HP\Desktop\lurisa\.next\static\media\21350d82a1f187e9-s.woff2                             18744  
+C:\Users\HP\Desktop\lurisa\.next\static\media\3d165c286d94e27c-s.woff2                             18108  
+C:\Users\HP\Desktop\lurisa\.next\static\media\591e43f23f51e5a5-s.woff2                             42056  
+C:\Users\HP\Desktop\lurisa\.next\static\media\7c21074d9bafed1b-s.woff2                             20084  
+C:\Users\HP\Desktop\lurisa\.next\static\media\8e9860b6e62d6359-s.woff2                             85272  
+C:\Users\HP\Desktop\lurisa\.next\static\media\916860560b9a2bc2-s.woff2                             13440  
+C:\Users\HP\Desktop\lurisa\.next\static\media\97ac91773d3121b2-s.p.woff2                           50924  
+C:\Users\HP\Desktop\lurisa\.next\static\media\ba9851c3c22cd980-s.woff2                             25844  
+C:\Users\HP\Desktop\lurisa\.next\static\media\c5fe6dc8356a8c31-s.woff2                             11272  
+C:\Users\HP\Desktop\lurisa\.next\static\media\df0a9ae256c0569c-s.woff2                             10280  
+C:\Users\HP\Desktop\lurisa\.next\static\media\e4af272ccee01ff0-s.p.woff2                           48432  
+C:\Users\HP\Desktop\lurisa\.next\static\media\e54d16b9f2c4535b-s.woff2                             36500  
+C:\Users\HP\Desktop\lurisa\.next\static\webpack                                                           
+C:\Users\HP\Desktop\lurisa\.next\static\webpack\app                                                       
+C:\Users\HP\Desktop\lurisa\.next\static\webpack\app\layout.4155194b5f891049.hot-update.js          1623   
+C:\Users\HP\Desktop\lurisa\.next\static\webpack\21f6fea94a440493.webpack.hot-update.json           31     
+C:\Users\HP\Desktop\lurisa\.next\static\webpack\4155194b5f891049.webpack.hot-update.json           44     
+C:\Users\HP\Desktop\lurisa\.next\static\webpack\6228264e865ff250.webpack.hot-update.json           31     
+C:\Users\HP\Desktop\lurisa\.next\static\webpack\633457081244afec._.hot-update.json                 22     
+C:\Users\HP\Desktop\lurisa\.next\static\webpack\beec4417f77ae8dc.webpack.hot-update.json           31     
+C:\Users\HP\Desktop\lurisa\.next\static\webpack\webpack.21f6fea94a440493.hot-update.js             858    
+C:\Users\HP\Desktop\lurisa\.next\static\webpack\webpack.4155194b5f891049.hot-update.js             858    
+C:\Users\HP\Desktop\lurisa\.next\static\webpack\webpack.6228264e865ff250.hot-update.js             858    
+C:\Users\HP\Desktop\lurisa\.next\static\webpack\webpack.beec4417f77ae8dc.hot-update.js             858    
+C:\Users\HP\Desktop\lurisa\.next\types                                                                    
+C:\Users\HP\Desktop\lurisa\.next\types\app                                                                
+C:\Users\HP\Desktop\lurisa\.next\types\app\(auth)                                                         
+C:\Users\HP\Desktop\lurisa\.next\types\app\(auth)\login                                                   
+C:\Users\HP\Desktop\lurisa\.next\types\app\(auth)\login\page.ts                                    3521   
+C:\Users\HP\Desktop\lurisa\.next\types\app\(auth)\layout.ts                                        3509   
+C:\Users\HP\Desktop\lurisa\.next\types\app\(dashboard)                                                    
+C:\Users\HP\Desktop\lurisa\.next\types\app\(dashboard)\chat                                               
+C:\Users\HP\Desktop\lurisa\.next\types\app\(dashboard)\chat\page.ts                                3533   
+C:\Users\HP\Desktop\lurisa\.next\types\app\(dashboard)\research                                           
+C:\Users\HP\Desktop\lurisa\.next\types\app\(dashboard)\research\page.ts                            3545   
+C:\Users\HP\Desktop\lurisa\.next\types\app\(dashboard)\layout.ts                                   3524   
+C:\Users\HP\Desktop\lurisa\.next\types\app\api                                                            
+C:\Users\HP\Desktop\lurisa\.next\types\app\api\auth                                                       
+C:\Users\HP\Desktop\lurisa\.next\types\app\api\auth\[...nextauth]                                         
+C:\Users\HP\Desktop\lurisa\.next\types\app\api\auth\[...nextauth]\route.ts                         8508   
+C:\Users\HP\Desktop\lurisa\.next\types\app\api\chat                                                       
+C:\Users\HP\Desktop\lurisa\.next\types\app\api\chat\proactive                                             
+C:\Users\HP\Desktop\lurisa\.next\types\app\api\chat\proactive\route.ts                             8496   
+C:\Users\HP\Desktop\lurisa\.next\types\app\api\dashboard                                                  
+C:\Users\HP\Desktop\lurisa\.next\types\app\api\dashboard\route.ts                                  8475   
+C:\Users\HP\Desktop\lurisa\.next\types\app\api\notifications                                              
+C:\Users\HP\Desktop\lurisa\.next\types\app\api\notifications\unread                                       
+C:\Users\HP\Desktop\lurisa\.next\types\app\api\notifications\unread\route.ts                       8514   
+C:\Users\HP\Desktop\lurisa\.next\types\app\api\research                                                   
+C:\Users\HP\Desktop\lurisa\.next\types\app\api\research\route.ts                                   8472   
+C:\Users\HP\Desktop\lurisa\.next\types\app\layout.ts                                               3482   
+C:\Users\HP\Desktop\lurisa\.next\types\app\page.ts                                                 3470   
+C:\Users\HP\Desktop\lurisa\.next\types\package.json                                                18     
+C:\Users\HP\Desktop\lurisa\.next\app-build-manifest.json                                           1081   
+C:\Users\HP\Desktop\lurisa\.next\build-manifest.json                                               361    
+C:\Users\HP\Desktop\lurisa\.next\package.json                                                      20     
+C:\Users\HP\Desktop\lurisa\.next\react-loadable-manifest.json                                      2      
+C:\Users\HP\Desktop\lurisa\.next\trace                                                             140292 
+C:\Users\HP\Desktop\lurisa\.vercel                                                                        
+C:\Users\HP\Desktop\lurisa\.vercel\README.txt                                                      520    
+C:\Users\HP\Desktop\lurisa\.vercel\repo.json                                                       205    
+C:\Users\HP\Desktop\lurisa\infra                                                                          
+C:\Users\HP\Desktop\lurisa\infra\docker                                                                   
+C:\Users\HP\Desktop\lurisa\infra\docker\docker-compose.yml                                         427    
+C:\Users\HP\Desktop\lurisa\prisma                                                                         
+C:\Users\HP\Desktop\lurisa\prisma\schema.prisma                                                    17531  
+C:\Users\HP\Desktop\lurisa\prisma\schema.prisma.bak                                                14765  
+C:\Users\HP\Desktop\lurisa\prisma\seed.ts                                                          719    
+C:\Users\HP\Desktop\lurisa\public                                                                         
+C:\Users\HP\Desktop\lurisa\public\icon-192x192.png                                                 35820  
+C:\Users\HP\Desktop\lurisa\public\icon-512x512.png                                                 39085  
+C:\Users\HP\Desktop\lurisa\public\manifest.json                                                    494    
+C:\Users\HP\Desktop\lurisa\public\sw.js                                                            2761   
+C:\Users\HP\Desktop\lurisa\src                                                                            
+C:\Users\HP\Desktop\lurisa\src\app                                                                        
+C:\Users\HP\Desktop\lurisa\src\app\(auth)                                                                 
+C:\Users\HP\Desktop\lurisa\src\app\(auth)\login                                                           
+C:\Users\HP\Desktop\lurisa\src\app\(auth)\login\page.tsx                                           444    
+C:\Users\HP\Desktop\lurisa\src\app\(auth)\register                                                        
+C:\Users\HP\Desktop\lurisa\src\app\(auth)\register\page.tsx                                        464    
+C:\Users\HP\Desktop\lurisa\src\app\(auth)\layout.tsx                                               672    
+C:\Users\HP\Desktop\lurisa\src\app\(dashboard)                                                            
+C:\Users\HP\Desktop\lurisa\src\app\(dashboard)\chat                                                       
+C:\Users\HP\Desktop\lurisa\src\app\(dashboard)\chat\page.tsx                                       202    
+C:\Users\HP\Desktop\lurisa\src\app\(dashboard)\goals                                                      
+C:\Users\HP\Desktop\lurisa\src\app\(dashboard)\goals\page.tsx                                      128    
+C:\Users\HP\Desktop\lurisa\src\app\(dashboard)\insights                                                   
+C:\Users\HP\Desktop\lurisa\src\app\(dashboard)\insights\page.tsx                                   155    
+C:\Users\HP\Desktop\lurisa\src\app\(dashboard)\memories                                                   
+C:\Users\HP\Desktop\lurisa\src\app\(dashboard)\memories\page.tsx                                   141    
+C:\Users\HP\Desktop\lurisa\src\app\(dashboard)\notifications                                              
+C:\Users\HP\Desktop\lurisa\src\app\(dashboard)\notifications\page.tsx                              158    
+C:\Users\HP\Desktop\lurisa\src\app\(dashboard)\research                                                   
+C:\Users\HP\Desktop\lurisa\src\app\(dashboard)\research\page.tsx                                   3916   
+C:\Users\HP\Desktop\lurisa\src\app\(dashboard)\settings                                                   
+C:\Users\HP\Desktop\lurisa\src\app\(dashboard)\settings\page.tsx                                   14264  
+C:\Users\HP\Desktop\lurisa\src\app\(dashboard)\timeline                                                   
+C:\Users\HP\Desktop\lurisa\src\app\(dashboard)\timeline\page.tsx                                   140    
+C:\Users\HP\Desktop\lurisa\src\app\(dashboard)\layout.tsx                                          516    
+C:\Users\HP\Desktop\lurisa\src\app\admin                                                                  
+C:\Users\HP\Desktop\lurisa\src\app\admin\audit                                                            
+C:\Users\HP\Desktop\lurisa\src\app\admin\audit\page.tsx                                            136    
+C:\Users\HP\Desktop\lurisa\src\app\admin\health                                                           
+C:\Users\HP\Desktop\lurisa\src\app\admin\health\page.tsx                                           143    
+C:\Users\HP\Desktop\lurisa\src\app\admin\users                                                            
+C:\Users\HP\Desktop\lurisa\src\app\admin\users\page.tsx                                            133    
+C:\Users\HP\Desktop\lurisa\src\app\admin\layout.tsx                                                900    
+C:\Users\HP\Desktop\lurisa\src\app\admin\page.tsx                                                  140    
+C:\Users\HP\Desktop\lurisa\src\app\api                                                                    
+C:\Users\HP\Desktop\lurisa\src\app\api\admin                                                              
+C:\Users\HP\Desktop\lurisa\src\app\api\admin\audit                                                        
+C:\Users\HP\Desktop\lurisa\src\app\api\admin\audit\route.ts                                        858    
+C:\Users\HP\Desktop\lurisa\src\app\api\admin\health                                                       
+C:\Users\HP\Desktop\lurisa\src\app\api\admin\health\route.ts                                       1169   
+C:\Users\HP\Desktop\lurisa\src\app\api\admin\stats                                                        
+C:\Users\HP\Desktop\lurisa\src\app\api\admin\stats\route.ts                                        1198   
+C:\Users\HP\Desktop\lurisa\src\app\api\admin\users                                                        
+C:\Users\HP\Desktop\lurisa\src\app\api\admin\users\route.ts                                        1217   
+C:\Users\HP\Desktop\lurisa\src\app\api\auth                                                               
+C:\Users\HP\Desktop\lurisa\src\app\api\auth\mfa                                                           
+C:\Users\HP\Desktop\lurisa\src\app\api\auth\mfa\setup                                                     
+C:\Users\HP\Desktop\lurisa\src\app\api\auth\mfa\setup\route.ts                                     807    
+C:\Users\HP\Desktop\lurisa\src\app\api\auth\register                                                      
+C:\Users\HP\Desktop\lurisa\src\app\api\auth\register\route.ts                                      1963   
+C:\Users\HP\Desktop\lurisa\src\app\api\auth\[...nextauth]                                                 
+C:\Users\HP\Desktop\lurisa\src\app\api\auth\[...nextauth]\route.ts                                 161    
+C:\Users\HP\Desktop\lurisa\src\app\api\chat                                                               
+C:\Users\HP\Desktop\lurisa\src\app\api\chat\proactive                                                     
+C:\Users\HP\Desktop\lurisa\src\app\api\chat\proactive\route.ts                                     3037   
+C:\Users\HP\Desktop\lurisa\src\app\api\chat\route.ts                                               8895   
+C:\Users\HP\Desktop\lurisa\src\app\api\chat\route.ts.bak                                           4505   
+C:\Users\HP\Desktop\lurisa\src\app\api\conversations                                                      
+C:\Users\HP\Desktop\lurisa\src\app\api\conversations\[id]                                                 
+C:\Users\HP\Desktop\lurisa\src\app\api\conversations\[id]\messages                                        
+C:\Users\HP\Desktop\lurisa\src\app\api\conversations\[id]\messages\route.ts                        820    
+C:\Users\HP\Desktop\lurisa\src\app\api\conversations\[id]\route.ts                                 951    
+C:\Users\HP\Desktop\lurisa\src\app\api\conversations\route.ts                                      1447   
+C:\Users\HP\Desktop\lurisa\src\app\api\dashboard                                                          
+C:\Users\HP\Desktop\lurisa\src\app\api\dashboard\route.ts                                          9851   
+C:\Users\HP\Desktop\lurisa\src\app\api\debug                                                              
+C:\Users\HP\Desktop\lurisa\src\app\api\debug\db                                                           
+C:\Users\HP\Desktop\lurisa\src\app\api\debug\db\route.ts                                           496    
+C:\Users\HP\Desktop\lurisa\src\app\api\debug\env                                                          
+C:\Users\HP\Desktop\lurisa\src\app\api\debug\env\route.ts                                          389    
+C:\Users\HP\Desktop\lurisa\src\app\api\debug\session                                                      
+C:\Users\HP\Desktop\lurisa\src\app\api\debug\session\route.ts                                      386    
+C:\Users\HP\Desktop\lurisa\src\app\api\follow-ups                                                         
+C:\Users\HP\Desktop\lurisa\src\app\api\follow-ups\route.ts                                         1545   
+C:\Users\HP\Desktop\lurisa\src\app\api\goals                                                              
+C:\Users\HP\Desktop\lurisa\src\app\api\goals\progress                                                     
+C:\Users\HP\Desktop\lurisa\src\app\api\goals\progress\route.ts                                     1126   
+C:\Users\HP\Desktop\lurisa\src\app\api\health                                                             
+C:\Users\HP\Desktop\lurisa\src\app\api\health\route.ts                                             861    
+C:\Users\HP\Desktop\lurisa\src\app\api\insights                                                           
+C:\Users\HP\Desktop\lurisa\src\app\api\insights\explain                                                   
+C:\Users\HP\Desktop\lurisa\src\app\api\insights\explain\route.ts                                   947    
+C:\Users\HP\Desktop\lurisa\src\app\api\insights\patterns                                                  
+C:\Users\HP\Desktop\lurisa\src\app\api\insights\patterns\route.ts                                  866    
+C:\Users\HP\Desktop\lurisa\src\app\api\jobs                                                               
+C:\Users\HP\Desktop\lurisa\src\app\api\jobs\process                                                       
+C:\Users\HP\Desktop\lurisa\src\app\api\jobs\process\route.ts                                       1069   
+C:\Users\HP\Desktop\lurisa\src\app\api\memories                                                           
+C:\Users\HP\Desktop\lurisa\src\app\api\memories\consolidate                                               
+C:\Users\HP\Desktop\lurisa\src\app\api\memories\consolidate\route.ts                               675    
+C:\Users\HP\Desktop\lurisa\src\app\api\memories\lifecycle                                                 
+C:\Users\HP\Desktop\lurisa\src\app\api\memories\lifecycle\route.ts                                 688    
+C:\Users\HP\Desktop\lurisa\src\app\api\memories\search                                                    
+C:\Users\HP\Desktop\lurisa\src\app\api\memories\search\route.ts                                    1064   
+C:\Users\HP\Desktop\lurisa\src\app\api\memories\[id]                                                      
+C:\Users\HP\Desktop\lurisa\src\app\api\memories\[id]\explanation                                          
+C:\Users\HP\Desktop\lurisa\src\app\api\memories\[id]\explanation\route.ts                          1405   
+C:\Users\HP\Desktop\lurisa\src\app\api\memories\[id]\links                                                
+C:\Users\HP\Desktop\lurisa\src\app\api\memories\[id]\links\route.ts                                651    
+C:\Users\HP\Desktop\lurisa\src\app\api\memories\[id]\route.ts                                      3591   
+C:\Users\HP\Desktop\lurisa\src\app\api\memories\route.ts                                           1037   
+C:\Users\HP\Desktop\lurisa\src\app\api\metrics                                                            
+C:\Users\HP\Desktop\lurisa\src\app\api\metrics\route.ts                                            407    
+C:\Users\HP\Desktop\lurisa\src\app\api\notifications                                                      
+C:\Users\HP\Desktop\lurisa\src\app\api\notifications\cron                                                 
+C:\Users\HP\Desktop\lurisa\src\app\api\notifications\cron\route.ts                                 1308   
+C:\Users\HP\Desktop\lurisa\src\app\api\notifications\unread                                               
+C:\Users\HP\Desktop\lurisa\src\app\api\notifications\unread\route.ts                               729    
+C:\Users\HP\Desktop\lurisa\src\app\api\notifications\route.ts                                      2191   
+C:\Users\HP\Desktop\lurisa\src\app\api\push                                                               
+C:\Users\HP\Desktop\lurisa\src\app\api\push\send                                                          
+C:\Users\HP\Desktop\lurisa\src\app\api\push\send\route.ts                                          1540   
+C:\Users\HP\Desktop\lurisa\src\app\api\push\subscribe                                                     
+C:\Users\HP\Desktop\lurisa\src\app\api\push\subscribe\route.ts                                     1603   
+C:\Users\HP\Desktop\lurisa\src\app\api\push\vapid                                                         
+C:\Users\HP\Desktop\lurisa\src\app\api\push\vapid\route.ts                                         323    
+C:\Users\HP\Desktop\lurisa\src\app\api\research                                                           
+C:\Users\HP\Desktop\lurisa\src\app\api\research\[id]                                                      
+C:\Users\HP\Desktop\lurisa\src\app\api\research\[id]\status                                               
+C:\Users\HP\Desktop\lurisa\src\app\api\research\[id]\status\route.ts                               1509   
+C:\Users\HP\Desktop\lurisa\src\app\api\research\[id]\route.ts                                      786    
+C:\Users\HP\Desktop\lurisa\src\app\api\research\route.ts                                           1897   
+C:\Users\HP\Desktop\lurisa\src\app\api\timeline                                                           
+C:\Users\HP\Desktop\lurisa\src\app\api\timeline\milestones                                                
+C:\Users\HP\Desktop\lurisa\src\app\api\timeline\milestones\route.ts                                750    
+C:\Users\HP\Desktop\lurisa\src\app\api\user                                                               
+C:\Users\HP\Desktop\lurisa\src\app\api\user\delete                                                        
+C:\Users\HP\Desktop\lurisa\src\app\api\user\delete\route.ts                                        1813   
+C:\Users\HP\Desktop\lurisa\src\app\api\user\devices                                                       
+C:\Users\HP\Desktop\lurisa\src\app\api\user\devices\route.ts                                       1421   
+C:\Users\HP\Desktop\lurisa\src\app\api\user\export                                                        
+C:\Users\HP\Desktop\lurisa\src\app\api\user\export\[jobId]                                                
+C:\Users\HP\Desktop\lurisa\src\app\api\user\export\[jobId]\route.ts                                2408   
+C:\Users\HP\Desktop\lurisa\src\app\api\user\export\route.ts                                        774    
+C:\Users\HP\Desktop\lurisa\src\app\api\user\profile                                                       
+C:\Users\HP\Desktop\lurisa\src\app\api\user\profile\route.ts                                       2311   
+C:\Users\HP\Desktop\lurisa\src\app\api\voice                                                              
+C:\Users\HP\Desktop\lurisa\src\app\api\voice\transcribe                                                   
+C:\Users\HP\Desktop\lurisa\src\app\api\voice\transcribe\route.ts                                   1194   
+C:\Users\HP\Desktop\lurisa\src\app\globals.css                                                     2094   
+C:\Users\HP\Desktop\lurisa\src\app\layout.tsx                                                      1180   
+C:\Users\HP\Desktop\lurisa\src\app\page.tsx                                                        403    
+C:\Users\HP\Desktop\lurisa\src\app\robots.ts                                                       278    
+C:\Users\HP\Desktop\lurisa\src\components                                                                 
+C:\Users\HP\Desktop\lurisa\src\components\admin                                                           
+C:\Users\HP\Desktop\lurisa\src\components\admin\admin-dashboard.tsx                                4772   
+C:\Users\HP\Desktop\lurisa\src\components\admin\admin-shell.tsx                                    3199   
+C:\Users\HP\Desktop\lurisa\src\components\admin\audit-viewer.tsx                                   5792   
+C:\Users\HP\Desktop\lurisa\src\components\admin\health-monitor.tsx                                 6207   
+C:\Users\HP\Desktop\lurisa\src\components\admin\users-table.tsx                                    6155   
+C:\Users\HP\Desktop\lurisa\src\components\auth                                                            
+C:\Users\HP\Desktop\lurisa\src\components\auth\login-form.tsx                                      4248   
+C:\Users\HP\Desktop\lurisa\src\components\auth\register-form.tsx                                   5319   
+C:\Users\HP\Desktop\lurisa\src\components\chat                                                            
+C:\Users\HP\Desktop\lurisa\src\components\chat\chat-input.tsx                                      2791   
+C:\Users\HP\Desktop\lurisa\src\components\chat\chat-interface.tsx                                  8929   
+C:\Users\HP\Desktop\lurisa\src\components\chat\chat-interface.tsx.bak                              6649   
+C:\Users\HP\Desktop\lurisa\src\components\chat\message-list.tsx                                    2052   
+C:\Users\HP\Desktop\lurisa\src\components\chat\typing-indicator.tsx                                952    
+C:\Users\HP\Desktop\lurisa\src\components\chat\voice-input.tsx                                     2851   
+C:\Users\HP\Desktop\lurisa\src\components\dashboard                                                       
+C:\Users\HP\Desktop\lurisa\src\components\dashboard\chat-interface.tsx                             8143   
+C:\Users\HP\Desktop\lurisa\src\components\dashboard\dashboard-home.tsx                             17957  
+C:\Users\HP\Desktop\lurisa\src\components\dashboard\dashboard-shell.tsx                            6975   
+C:\Users\HP\Desktop\lurisa\src\components\dashboard\goals-page.tsx                                 3707   
+C:\Users\HP\Desktop\lurisa\src\components\dashboard\insights-dashboard.tsx                         4445   
+C:\Users\HP\Desktop\lurisa\src\components\dashboard\insights-page.tsx                              529    
+C:\Users\HP\Desktop\lurisa\src\components\dashboard\memories-page.tsx                              9099   
+C:\Users\HP\Desktop\lurisa\src\components\dashboard\notifications-page.tsx                         3528   
+C:\Users\HP\Desktop\lurisa\src\components\dashboard\settings-page.tsx                              4627   
+C:\Users\HP\Desktop\lurisa\src\components\dashboard\timeline-page.tsx                              2750   
+C:\Users\HP\Desktop\lurisa\src\components\landing                                                         
+C:\Users\HP\Desktop\lurisa\src\components\landing\landing-page.tsx                                 9271   
+C:\Users\HP\Desktop\lurisa\src\components\pwa                                                             
+C:\Users\HP\Desktop\lurisa\src\components\pwa\install-prompt.tsx                                   1917   
+C:\Users\HP\Desktop\lurisa\src\components\pwa\push-manager.tsx                                     3029   
+C:\Users\HP\Desktop\lurisa\src\components\pwa\service-worker-register.tsx                          392    
+C:\Users\HP\Desktop\lurisa\src\components\research                                                        
+C:\Users\HP\Desktop\lurisa\src\components\research\contradictions-panel.tsx                        1734   
+C:\Users\HP\Desktop\lurisa\src\components\research\findings-panel.tsx                              2261   
+C:\Users\HP\Desktop\lurisa\src\components\research\index.ts                                        392    
+C:\Users\HP\Desktop\lurisa\src\components\research\personal-interpretation.tsx                     1446   
+C:\Users\HP\Desktop\lurisa\src\components\research\research-card.tsx                               2737   
+C:\Users\HP\Desktop\lurisa\src\components\research\research-detail.tsx                             6445   
+C:\Users\HP\Desktop\lurisa\src\components\research\research-progress.tsx                           4043   
+C:\Users\HP\Desktop\lurisa\src\components\research\source-list.tsx                                 3586   
+C:\Users\HP\Desktop\lurisa\src\components\ui                                                              
+C:\Users\HP\Desktop\lurisa\src\components\ui\avatar.tsx                                            1151   
+C:\Users\HP\Desktop\lurisa\src\components\ui\badge.tsx                                             1353   
+C:\Users\HP\Desktop\lurisa\src\components\ui\button.tsx                                            1840   
+C:\Users\HP\Desktop\lurisa\src\components\ui\card.tsx                                              1843   
+C:\Users\HP\Desktop\lurisa\src\components\ui\input.tsx                                             858    
+C:\Users\HP\Desktop\lurisa\src\components\ui\skeleton.tsx                                          268    
+C:\Users\HP\Desktop\lurisa\src\components\ui\switch.tsx                                            1572   
+C:\Users\HP\Desktop\lurisa\src\components\ui\textarea.tsx                                          870    
+C:\Users\HP\Desktop\lurisa\src\components\providers.tsx                                            363    
+C:\Users\HP\Desktop\lurisa\src\hooks                                                                      
+C:\Users\HP\Desktop\lurisa\src\hooks\use-research.ts                                               3718   
+C:\Users\HP\Desktop\lurisa\src\lib                                                                        
+C:\Users\HP\Desktop\lurisa\src\lib\conversation                                                           
+C:\Users\HP\Desktop\lurisa\src\lib\conversation\emotion-detector.ts                                2343   
+C:\Users\HP\Desktop\lurisa\src\lib\conversation\engine.ts                                          2620   
+C:\Users\HP\Desktop\lurisa\src\lib\conversation\mode-detector.ts                                   3290   
+C:\Users\HP\Desktop\lurisa\src\lib\conversation\starters.ts                                        1265   
+C:\Users\HP\Desktop\lurisa\src\lib\conversation\types.ts                                           611    
+C:\Users\HP\Desktop\lurisa\src\lib\goals                                                                  
+C:\Users\HP\Desktop\lurisa\src\lib\goals\chat-context.ts                                           1681   
+C:\Users\HP\Desktop\lurisa\src\lib\initiative                                                             
+C:\Users\HP\Desktop\lurisa\src\lib\initiative\score-engine.ts                                      2251   
+C:\Users\HP\Desktop\lurisa\src\lib\insights                                                               
+C:\Users\HP\Desktop\lurisa\src\lib\insights\cross-memory.ts                                        1586   
+C:\Users\HP\Desktop\lurisa\src\lib\insights\explainability.ts                                      1870   
+C:\Users\HP\Desktop\lurisa\src\lib\insights\patterns.ts                                            3941   
+C:\Users\HP\Desktop\lurisa\src\lib\llm                                                                    
+C:\Users\HP\Desktop\lurisa\src\lib\llm\gateway.ts                                                  7445   
+C:\Users\HP\Desktop\lurisa\src\lib\memory                                                                 
+C:\Users\HP\Desktop\lurisa\src\lib\memory\context.ts                                               3952   
+C:\Users\HP\Desktop\lurisa\src\lib\memory\dedup.ts                                                 6882   
+C:\Users\HP\Desktop\lurisa\src\lib\memory\embeddings.ts                                            1281   
+C:\Users\HP\Desktop\lurisa\src\lib\memory\extraction.ts                                            18979  
+C:\Users\HP\Desktop\lurisa\src\lib\memory\lifecycle.ts                                             2406   
+C:\Users\HP\Desktop\lurisa\src\lib\memory\scoring.ts                                               1284   
+C:\Users\HP\Desktop\lurisa\src\lib\memory\synthesis.ts                                             5192   
+C:\Users\HP\Desktop\lurisa\src\lib\notifications                                                          
+C:\Users\HP\Desktop\lurisa\src\lib\notifications\daily-rhythm.ts                                   7631   
+C:\Users\HP\Desktop\lurisa\src\lib\personal-model                                                         
+C:\Users\HP\Desktop\lurisa\src\lib\personal-model\inference.ts                                     5842   
+C:\Users\HP\Desktop\lurisa\src\lib\personal-model\store.ts                                         2099   
+C:\Users\HP\Desktop\lurisa\src\lib\personal-model\types.ts                                         855    
+C:\Users\HP\Desktop\lurisa\src\lib\personality                                                            
+C:\Users\HP\Desktop\lurisa\src\lib\personality\config.ts                                           2905   
+C:\Users\HP\Desktop\lurisa\src\lib\personality\humanize.ts                                         4034   
+C:\Users\HP\Desktop\lurisa\src\lib\personality\quality-check.ts                                    5813   
+C:\Users\HP\Desktop\lurisa\src\lib\personality\system-prompt.ts                                    9164   
+C:\Users\HP\Desktop\lurisa\src\lib\relationship                                                           
+C:\Users\HP\Desktop\lurisa\src\lib\relationship\stage.ts                                           3021   
+C:\Users\HP\Desktop\lurisa\src\lib\research                                                               
+C:\Users\HP\Desktop\lurisa\src\lib\research\browser.ts                                             1556   
+C:\Users\HP\Desktop\lurisa\src\lib\research\contradiction.ts                                       2716   
+C:\Users\HP\Desktop\lurisa\src\lib\research\engine.ts                                              8997   
+C:\Users\HP\Desktop\lurisa\src\lib\research\evidence.ts                                            1385   
+C:\Users\HP\Desktop\lurisa\src\lib\research\intent-detector.ts                                     2196   
+C:\Users\HP\Desktop\lurisa\src\lib\research\memory.ts                                              570    
+C:\Users\HP\Desktop\lurisa\src\lib\research\personalizer.ts                                        2318   
+C:\Users\HP\Desktop\lurisa\src\lib\research\planner.ts                                             1661   
+C:\Users\HP\Desktop\lurisa\src\lib\research\search.ts                                              1994   
+C:\Users\HP\Desktop\lurisa\src\lib\research\synthesis.ts                                           1874   
+C:\Users\HP\Desktop\lurisa\src\lib\research\types.ts                                               1777   
+C:\Users\HP\Desktop\lurisa\src\lib\timeline                                                               
+C:\Users\HP\Desktop\lurisa\src\lib\timeline\milestones.ts                                          1648   
+C:\Users\HP\Desktop\lurisa\src\lib\admin.ts                                                        2543   
+C:\Users\HP\Desktop\lurisa\src\lib\audit.ts                                                        592    
+C:\Users\HP\Desktop\lurisa\src\lib\auth.ts                                                         7645   
+C:\Users\HP\Desktop\lurisa\src\lib\auth.ts.bak                                                     6051   
+C:\Users\HP\Desktop\lurisa\src\lib\cache.ts                                                        2303   
+C:\Users\HP\Desktop\lurisa\src\lib\consolidation.ts                                                3987   
+C:\Users\HP\Desktop\lurisa\src\lib\context-assembly.ts                                             5692   
+C:\Users\HP\Desktop\lurisa\src\lib\context-assembly.ts.bak                                         5553   
+C:\Users\HP\Desktop\lurisa\src\lib\db.ts                                                           2465   
+C:\Users\HP\Desktop\lurisa\src\lib\embeddings.ts                                                   1246   
+C:\Users\HP\Desktop\lurisa\src\lib\encryption.ts                                                   1861   
+C:\Users\HP\Desktop\lurisa\src\lib\error-handler.ts                                                5464   
+C:\Users\HP\Desktop\lurisa\src\lib\follow-up.ts                                                    14460  
+C:\Users\HP\Desktop\lurisa\src\lib\graph-queries.ts                                                3879   
+C:\Users\HP\Desktop\lurisa\src\lib\graph-traversal.ts                                              1958   
+C:\Users\HP\Desktop\lurisa\src\lib\importance-engine.ts                                            2215   
+C:\Users\HP\Desktop\lurisa\src\lib\llm-gateway.ts                                                  4775   
+C:\Users\HP\Desktop\lurisa\src\lib\memory-pipeline.ts                                              13326  
+C:\Users\HP\Desktop\lurisa\src\lib\metrics.ts                                                      1969   
+C:\Users\HP\Desktop\lurisa\src\lib\mfa.ts                                                          658    
+C:\Users\HP\Desktop\lurisa\src\lib\queue.ts                                                        2845   
+C:\Users\HP\Desktop\lurisa\src\lib\rate-limit.ts                                                   2429   
+C:\Users\HP\Desktop\lurisa\src\lib\redis.ts                                                        3653   
+C:\Users\HP\Desktop\lurisa\src\lib\scoring.ts                                                      2418   
+C:\Users\HP\Desktop\lurisa\src\lib\security.ts                                                     1977   
+C:\Users\HP\Desktop\lurisa\src\lib\utils.ts                                                        892    
+C:\Users\HP\Desktop\lurisa\src\lib\validation.ts                                                   1477   
+C:\Users\HP\Desktop\lurisa\src\lib\vector-search.ts                                                3640   
+C:\Users\HP\Desktop\lurisa\src\metrics                                                                    
+C:\Users\HP\Desktop\lurisa\src\metrics\server.ts                                                   506    
+C:\Users\HP\Desktop\lurisa\src\monitoring                                                                 
+C:\Users\HP\Desktop\lurisa\src\monitoring\health-check.ts                                          3078   
+C:\Users\HP\Desktop\lurisa\src\types                                                                      
+C:\Users\HP\Desktop\lurisa\src\types\index.ts                                                      1461   
+C:\Users\HP\Desktop\lurisa\src\types\web-push.d.ts                                                 31     
+C:\Users\HP\Desktop\lurisa\src\workers                                                                    
+C:\Users\HP\Desktop\lurisa\src\workers\consolidation-worker.ts                                     2580   
+C:\Users\HP\Desktop\lurisa\src\workers\export-worker.ts                                            1561   
+C:\Users\HP\Desktop\lurisa\src\workers\follow-up-worker.ts                                         1036   
+C:\Users\HP\Desktop\lurisa\src\workers\lifecycle-worker.ts                                         1003   
+C:\Users\HP\Desktop\lurisa\src\workers\memory-worker.ts                                            784    
+C:\Users\HP\Desktop\lurisa\src\workers\notification-worker.ts                                      1769   
+C:\Users\HP\Desktop\lurisa\src\middleware.ts                                                       932    
+C:\Users\HP\Desktop\lurisa\.dockerignore                                                           127    
+C:\Users\HP\Desktop\lurisa\.env                                                                    976    
+C:\Users\HP\Desktop\lurisa\.env.example                                                            1258   
+C:\Users\HP\Desktop\lurisa\.env.example.bak                                                        778    
+C:\Users\HP\Desktop\lurisa\.env.local                                                              352    
+C:\Users\HP\Desktop\lurisa\.gitignore                                                              177    
+C:\Users\HP\Desktop\lurisa\build-dashboard.ps1                                                     29387  
+C:\Users\HP\Desktop\lurisa\build-research-frontend.ps1                                             34541  
+C:\Users\HP\Desktop\lurisa\debug-dump.txt                                                          64260  
+C:\Users\HP\Desktop\lurisa\docker-compose.prod.yml                                                 2356   
+C:\Users\HP\Desktop\lurisa\Dockerfile                                                              1149   
+C:\Users\HP\Desktop\lurisa\Dockerfile.worker                                                       148    
+C:\Users\HP\Desktop\lurisa\fix-intent.sql                                                          137    
+C:\Users\HP\Desktop\lurisa\fix.js                                                                  329    
+C:\Users\HP\Desktop\lurisa\lurisa-stage5.zip                                                       42794  
+C:\Users\HP\Desktop\lurisa\next-env.d.ts                                                           228    
+C:\Users\HP\Desktop\lurisa\next.config.js                                                          2019   
+C:\Users\HP\Desktop\lurisa\package-lock.json                                                       333745 
+C:\Users\HP\Desktop\lurisa\package.json                                                            2191   
+C:\Users\HP\Desktop\lurisa\postcss.config.js                                                       83     
+C:\Users\HP\Desktop\lurisa\project_files.txt                                                       7426668
+C:\Users\HP\Desktop\lurisa\project_structure.txt                                                   7762227
+C:\Users\HP\Desktop\lurisa\README.md                                                               6082   
+C:\Users\HP\Desktop\lurisa\redis.conf                                                              25     
+C:\Users\HP\Desktop\lurisa\source_structure.txt                                                    5      
+C:\Users\HP\Desktop\lurisa\strip-bom.js                                                            190    
+C:\Users\HP\Desktop\lurisa\tailwind.config.ts                                                      2061   
+C:\Users\HP\Desktop\lurisa\test-redis.js                                                           373    
+C:\Users\HP\Desktop\lurisa\tsconfig.json                                                           672    
+C:\Users\HP\Desktop\lurisa\tsconfig.tsbuildinfo                                                    176721 
+
+

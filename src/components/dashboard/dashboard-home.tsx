@@ -1,125 +1,440 @@
-﻿'use client';
+"use client";
 
-import { useEffect, useState } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Skeleton } from '@/components/ui/skeleton';
-import { Brain, MessageSquare, Target, Clock, Sparkles, ArrowRight, AlertCircle } from 'lucide-react';
-import Link from 'next/link';
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import {
+  Sun,
+  Moon,
+  Sunrise,
+  Target,
+  BookOpen,
+  MessageCircle,
+  Sparkles,
+  Clock,
+  ChevronRight,
+  Loader2,
+  Zap,
+  AlertTriangle,
+  CheckCircle2,
+  Circle,
+  Search,
+  Lightbulb,
+  ArrowRight,
+} from "lucide-react";
 
-interface DashboardStats {
-  memoryCount: number;
-  conversationCount: number;
-  goalCount: number;
-  pendingConfirmations: number;
-  recentMemories: any[];
+interface DashboardData {
+  user: { id: string; name?: string | null; email: string };
+  greeting: string;
+  userName: string;
+  subtitle: string;
+  priorities: Array<{
+    type: string;
+    id: string;
+    title: string;
+    subtitle: string;
+    href: string;
+    urgency: string;
+    dueText: string;
+  }>;
+  noticed: {
+    title: string;
+    description: string;
+    evidence: string;
+    confidence: number;
+    examples: string[];
+  } | null;
+  research: {
+    active: any[];
+    recentCompleted: any[];
+  };
+  goals: {
+    active: any[];
+  };
+  projects: Array<{
+    type: string;
+    id: string;
+    title: string;
+    subtitle: string;
+    meta: string;
+    href: string;
+  }>;
+  recentLife: Array<{
+    id: string;
+    date: string;
+    label: string;
+    description: string;
+    type: string;
+    href: string;
+  }>;
+}
+
+function TimeIcon({ hour }: { hour: number }) {
+  if (hour < 12) return <Sunrise className="w-5 h-5 text-amber-500" />;
+  if (hour < 17) return <Sun className="w-5 h-5 text-amber-500" />;
+  return <Moon className="w-5 h-5 text-indigo-400" />;
+}
+
+function UrgencyBadge({ urgency }: { urgency: string }) {
+  const config: Record<string, string> = {
+    overdue: "bg-terracotta-500/10 text-terracotta-500 border-terracotta-500/20",
+    critical: "bg-terracotta-500/10 text-terracotta-500 border-terracotta-500/20",
+    high: "bg-amber-500/10 text-amber-600 border-amber-500/20",
+    medium: "bg-indigo-500/10 text-indigo-500 border-indigo-500/20",
+    low: "bg-sage-500/10 text-sage-600 border-sage-500/20",
+  };
+  const cls = config[urgency] || config.low;
+  const label = urgency === "overdue" ? "Overdue" : urgency === "critical" ? "Due today" : urgency === "high" ? "Soon" : urgency === "medium" ? "In progress" : "Upcoming";
+  return (
+    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${cls}`}>
+      {label}
+    </span>
+  );
+}
+
+function TypeIcon({ type }: { type: string }) {
+  if (type === "goal") return <Target className="w-4 h-4 text-sage-500" />;
+  if (type === "research") return <BookOpen className="w-4 h-4 text-indigo-500" />;
+  return <Circle className="w-4 h-4 text-stone-400" />;
+}
+
+function LifeIcon({ type }: { type: string }) {
+  if (type === "research") return <BookOpen className="w-3.5 h-3.5 text-indigo-400" />;
+  if (type === "timeline") return <Clock className="w-3.5 h-3.5 text-sage-400" />;
+  return <MessageCircle className="w-3.5 h-3.5 text-amber-400" />;
 }
 
 export function DashboardHome() {
-  const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showEvidence, setShowEvidence] = useState(false);
 
-  useEffect(() => { fetchStats(); }, []);
+  useEffect(() => {
+    fetchDashboard();
+  }, []);
 
-  async function fetchStats() {
+  async function fetchDashboard() {
     try {
-      const response = await fetch('/api/user/profile');
-      if (response.ok) {
-        const data = await response.json();
-        setStats({
-          memoryCount: data.user._count.memories,
-          conversationCount: data.user._count.conversations,
-          goalCount: data.user._count.goals,
-          pendingConfirmations: 0,
-          recentMemories: [],
-        });
+      const res = await fetch("/api/dashboard");
+      if (res.ok) {
+        const json = await res.json();
+        setData(json);
       }
-    } catch (error) { console.error('Failed to fetch stats:', error); }
-    finally { setLoading(false); }
+    } catch (err) {
+      console.error("Dashboard fetch error:", err);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const hour = new Date().getHours();
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-24">
+        <Loader2 className="w-6 h-6 text-stone-400 animate-spin" />
+      </div>
+    );
+  }
+
+  if (!data) {
+    return (
+      <div className="text-center py-24">
+        <p className="text-stone-500">Could not load your dashboard.</p>
+        <button
+          onClick={fetchDashboard}
+          className="mt-3 text-sm text-indigo-500 hover:text-indigo-700"
+        >
+          Try again
+        </button>
+      </div>
+    );
   }
 
   return (
-    <div className="space-y-8 animate-fade-in">
-      <div>
-        <h1 className="text-2xl font-serif text-indigo-500 dark:text-indigo-300 mb-2">Good to see you</h1>
-        <p className="text-charcoal-500 dark:text-parchment-300">Here&apos;s what lurisa remembers about your journey so far.</p>
-      </div>
+    <div className="max-w-3xl mx-auto space-y-8 pb-16 animate-fade-in">
+      {/* â”€â”€ Contextual Header â”€â”€ */}
+      <header className="space-y-1">
+        <div className="flex items-center gap-3">
+          <TimeIcon hour={hour} />
+          <h1 className="text-2xl font-serif text-indigo-500 dark:text-indigo-300">
+            {data.greeting}, {data.userName}.
+          </h1>
+        </div>
+        <p className="text-sm text-charcoal-500 dark:text-parchment-300 pl-8">
+          {data.subtitle}
+        </p>
+        <p className="text-xs text-stone-400 pl-8">
+          {new Date().toLocaleDateString(undefined, {
+            weekday: "long",
+            month: "long",
+            day: "numeric",
+            hour: "numeric",
+            minute: "2-digit",
+          })}
+        </p>
+      </header>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <StatCard icon={<Brain className="h-5 w-5 text-sage-500" />} label="Memories" value={loading ? null : stats?.memoryCount ?? 0} href="/memories" />
-        <StatCard icon={<MessageSquare className="h-5 w-5 text-indigo-500" />} label="Conversations" value={loading ? null : stats?.conversationCount ?? 0} href="/chat" />
-        <StatCard icon={<Target className="h-5 w-5 text-amber-500" />} label="Goals" value={loading ? null : stats?.goalCount ?? 0} href="/goals" />
-      </div>
-
-      {stats && stats.pendingConfirmations > 0 && (
-        <Card className="border-amber-500/30 bg-amber-50 dark:bg-amber-900/10">
-          <CardContent className="p-4 flex items-center space-x-3">
-            <AlertCircle className="h-5 w-5 text-amber-500" />
-            <div>
-              <p className="text-sm font-medium text-charcoal-700 dark:text-parchment-100">{stats.pendingConfirmations} memory{stats.pendingConfirmations > 1 ? 'ies' : 'y'} need your attention</p>
-              <p className="text-xs text-charcoal-500 dark:text-parchment-300">lurisa found something that conflicts with what it knows</p>
-            </div>
-            <Link href="/memories" className="ml-auto"><Button size="sm" variant="outline">Review</Button></Link>
-          </CardContent>
-        </Card>
+      {/* â”€â”€ TODAY â”€â”€ */}
+      {data.priorities.length > 0 && (
+        <section className="p-5 rounded-2xl bg-parchment-100 dark:bg-indigo-900 border border-parchment-700/20 dark:border-indigo-800/30">
+          <h2 className="text-xs font-semibold text-stone-500 uppercase tracking-wider mb-4">
+            Today
+          </h2>
+          <div className="space-y-3">
+            {data.priorities.map((p) => (
+              <Link
+                key={`${p.type}-${p.id}`}
+                href={p.href}
+                className="flex items-start gap-3 p-3 rounded-xl bg-white dark:bg-indigo-800/50 border border-stone-100 dark:border-indigo-700/30 hover:border-indigo-300 dark:hover:border-indigo-500 transition-colors group"
+              >
+                <div className="mt-0.5">
+                  <TypeIcon type={p.type} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="text-sm font-medium text-stone-800 dark:text-parchment-100 truncate">
+                      {p.title}
+                    </p>
+                    <UrgencyBadge urgency={p.urgency} />
+                  </div>
+                  <p className="text-xs text-stone-500 dark:text-parchment-300 mt-0.5">
+                    {p.subtitle}
+                  </p>
+                </div>
+                <ChevronRight className="w-4 h-4 text-stone-300 group-hover:text-stone-500 shrink-0 mt-1" />
+              </Link>
+            ))}
+          </div>
+        </section>
       )}
 
+      {/* â”€â”€ YOUR PRIORITIES + ACTIVE PROJECTS â”€â”€ */}
       <div className="grid md:grid-cols-2 gap-6">
-        <Card className="border-parchment-700/30 dark:border-indigo-800/30">
-          <CardHeader>
-            <div className="flex items-center space-x-2">
-              <Sparkles className="h-5 w-5 text-amber-500" />
-              <CardTitle className="text-lg font-serif text-indigo-500 dark:text-indigo-300">Start a conversation</CardTitle>
+        {/* Priorities */}
+        <section className="p-5 rounded-2xl bg-white dark:bg-indigo-900 border border-parchment-700/20 dark:border-indigo-800/30">
+          <h2 className="text-xs font-semibold text-stone-500 uppercase tracking-wider mb-4">
+            Your Priorities
+          </h2>
+          {data.goals.active.length === 0 ? (
+            <p className="text-sm text-stone-400">No active goals yet.</p>
+          ) : (
+            <div className="space-y-3">
+              {data.goals.active.slice(0, 4).map((g) => (
+                <Link
+                  key={g.id}
+                  href="/goals"
+                  className="block group"
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <p className="text-sm font-medium text-stone-800 dark:text-parchment-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-300 transition-colors">
+                      {g.title}
+                    </p>
+                    {g.daysUntil !== null && (
+                      <span className={`text-xs ${g.daysUntil < 0 ? "text-terracotta-500" : g.daysUntil <= 3 ? "text-amber-600" : "text-stone-400"}`}>
+                        {g.daysUntil < 0 ? "Overdue" : g.daysUntil === 0 ? "Today" : `${g.daysUntil}d left`}
+                      </span>
+                    )}
+                  </div>
+                  <div className="w-full h-1.5 bg-stone-100 dark:bg-indigo-800 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-sage-500 rounded-full transition-all"
+                      style={{ width: `${Math.max(5, Math.min(100, 100 - (g.daysUntil > 0 ? g.daysUntil * 8 : 0)))}%` }}
+                    />
+                  </div>
+                </Link>
+              ))}
             </div>
-            <CardDescription>Share what&apos;s on your mind. lurisa listens and remembers.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Link href="/chat"><Button className="w-full">Open Chat <ArrowRight className="ml-2 h-4 w-4" /></Button></Link>
-          </CardContent>
-        </Card>
+          )}
+        </section>
 
-        <Card className="border-parchment-700/30 dark:border-indigo-800/30">
-          <CardHeader>
-            <div className="flex items-center space-x-2">
-              <Clock className="h-5 w-5 text-terracotta-500" />
-              <CardTitle className="text-lg font-serif text-indigo-500 dark:text-indigo-300">Evening reflection</CardTitle>
+        {/* Active Projects */}
+        <section className="p-5 rounded-2xl bg-white dark:bg-indigo-900 border border-parchment-700/20 dark:border-indigo-800/30">
+          <h2 className="text-xs font-semibold text-stone-500 uppercase tracking-wider mb-4">
+            Active Projects
+          </h2>
+          {data.projects.length === 0 ? (
+            <p className="text-sm text-stone-400">No active projects.</p>
+          ) : (
+            <div className="space-y-3">
+              {data.projects.map((proj) => (
+                <Link
+                  key={`${proj.type}-${proj.id}`}
+                  href={proj.href}
+                  className="flex items-center justify-between p-3 rounded-xl bg-stone-50 dark:bg-indigo-800/30 hover:bg-stone-100 dark:hover:bg-indigo-800/50 transition-colors group"
+                >
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-stone-800 dark:text-parchment-100 truncate">
+                      {proj.title}
+                    </p>
+                    <p className="text-xs text-stone-500 dark:text-parchment-300 truncate">
+                      {proj.subtitle}
+                    </p>
+                  </div>
+                  <span className={`text-xs font-medium shrink-0 ml-2 ${
+                    proj.meta === "Complete" ? "text-emerald-600" :
+                    proj.meta === "Overdue" ? "text-terracotta-500" :
+                    proj.meta === "In progress" ? "text-indigo-500" :
+                    "text-stone-400"
+                  }`}>
+                    {proj.meta}
+                  </span>
+                </Link>
+              ))}
             </div>
-            <CardDescription>Take a moment to reflect on today. What did you learn?</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Link href="/chat?mode=evening"><Button variant="outline" className="w-full">Reflect <ArrowRight className="ml-2 h-4 w-4" /></Button></Link>
-          </CardContent>
-        </Card>
+          )}
+        </section>
       </div>
 
-      <div>
-        <h2 className="text-lg font-serif text-indigo-500 dark:text-indigo-300 mb-4">Memory categories</h2>
-        <div className="flex flex-wrap gap-2">
-          {['Identity', 'Relationships', 'Goals', 'Career', 'Health', 'Lessons', 'Stories', 'Dreams'].map((cat) => (
-            <Badge key={cat} variant="outline">{cat}</Badge>
+      {/* â”€â”€ SOMETHING I'VE NOTICED â”€â”€ */}
+      {data.noticed && (
+        <section className="p-5 rounded-2xl bg-amber-50/40 dark:bg-indigo-900 border border-amber-200/60 dark:border-indigo-800/30">
+          <div className="flex items-center gap-2 mb-3">
+            <Sparkles className="w-4 h-4 text-amber-500" />
+            <h2 className="text-xs font-semibold text-stone-500 uppercase tracking-wider">
+              Something I&apos;ve Noticed
+            </h2>
+          </div>
+          <p className="text-sm font-medium text-stone-800 dark:text-parchment-100 mb-1">
+            {data.noticed.title}
+          </p>
+          <p className="text-sm text-stone-600 dark:text-parchment-300 leading-relaxed">
+            {data.noticed.description}
+          </p>
+
+          {showEvidence && (
+            <div className="mt-3 p-3 rounded-lg bg-white dark:bg-indigo-800/40 border border-amber-100 dark:border-indigo-700/30">
+              <p className="text-xs text-stone-500 mb-1">{data.noticed.evidence}</p>
+              {data.noticed.examples.length > 0 && (
+                <ul className="space-y-1 mt-2">
+                  {data.noticed.examples.map((ex, i) => (
+                    <li key={i} className="text-xs text-stone-500 italic">â€œ{ex}â€</li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+
+          <button
+            onClick={() => setShowEvidence(!showEvidence)}
+            className="mt-3 text-xs text-stone-400 hover:text-stone-600 dark:hover:text-parchment-300 transition-colors"
+          >
+            {showEvidence ? "Hide evidence" : "Why am I seeing this?"}
+          </button>
+        </section>
+      )}
+
+      {/* â”€â”€ RESEARCH â”€â”€ */}
+      {(data.research.active.length > 0 || data.research.recentCompleted.length > 0) && (
+        <section className="p-5 rounded-2xl bg-white dark:bg-indigo-900 border border-parchment-700/20 dark:border-indigo-800/30">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xs font-semibold text-stone-500 uppercase tracking-wider">
+              Research
+            </h2>
+            <Link href="/research" className="text-xs text-indigo-500 hover:text-indigo-700 flex items-center gap-1">
+              View all <ChevronRight className="w-3 h-3" />
+            </Link>
+          </div>
+
+          {data.research.active.length > 0 && (
+            <div className="mb-3 p-3 rounded-xl bg-indigo-50 dark:bg-indigo-800/30 border border-indigo-100 dark:border-indigo-700/30">
+              <div className="flex items-center gap-2 mb-1">
+                <Loader2 className="w-3.5 h-3.5 text-indigo-500 animate-spin" />
+                <p className="text-sm font-medium text-stone-800 dark:text-parchment-100">
+                  {data.research.active[0].objective || data.research.active[0].query}
+                </p>
+              </div>
+              <p className="text-xs text-stone-500">
+                {data.research.active[0].depth} research Â· {data.research.active[0].status.toLowerCase()}
+              </p>
+            </div>
+          )}
+
+          {data.research.recentCompleted.slice(0, 2).map((r) => (
+            <Link
+              key={r.id}
+              href="/research"
+              className="flex items-start gap-3 p-3 rounded-xl hover:bg-stone-50 dark:hover:bg-indigo-800/30 transition-colors group"
+            >
+              <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-stone-800 dark:text-parchment-100 truncate group-hover:text-indigo-600 dark:group-hover:text-indigo-300 transition-colors">
+                  {r.objective || r.query}
+                </p>
+                <p className="text-xs text-stone-500 dark:text-parchment-300">
+                  {r._count?.sources || 0} sources Â· {r.depth} research Â· Complete
+                </p>
+                {r.personalInterpretation && (
+                  <p className="text-xs text-stone-600 dark:text-parchment-300 mt-1 line-clamp-2">
+                    {r.personalInterpretation}
+                  </p>
+                )}
+              </div>
+              <ChevronRight className="w-4 h-4 text-stone-300 group-hover:text-stone-500 shrink-0" />
+            </Link>
           ))}
+        </section>
+      )}
+
+      {/* â”€â”€ RECENT LIFE â”€â”€ */}
+      {data.recentLife.length > 0 && (
+        <section>
+          <h2 className="text-xs font-semibold text-stone-500 uppercase tracking-wider mb-4">
+            Recent Life
+          </h2>
+          <div className="relative pl-4 border-l border-stone-200 dark:border-indigo-800 space-y-4">
+            {data.recentLife.map((item, i) => (
+              <Link
+                key={`${item.type}-${item.id}-${i}`}
+                href={item.href}
+                className="block group relative"
+              >
+                <span className="absolute -left-[21px] top-1 w-2.5 h-2.5 rounded-full bg-parchment-300 dark:bg-indigo-700 border-2 border-white dark:border-indigo-900" />
+                <div className="flex items-start gap-3">
+                  <LifeIcon type={item.type} />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs text-stone-400 dark:text-parchment-400">
+                      {item.label} Â· {new Date(item.date).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+                    </p>
+                    <p className="text-sm text-stone-700 dark:text-parchment-200 truncate group-hover:text-indigo-600 dark:group-hover:text-indigo-300 transition-colors">
+                      {item.description}
+                    </p>
+                  </div>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* â”€â”€ Chat CTA â”€â”€ */}
+      <section className="text-center pt-8 pb-4">
+        <p className="text-sm text-stone-500 dark:text-parchment-300 mb-3">
+          What are you thinking about?
+        </p>
+        <div className="flex flex-wrap items-center justify-center gap-3">
+          <Link
+            href="/chat"
+            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-500 text-parchment-100 text-sm font-medium hover:bg-indigo-600 transition-colors shadow-sm"
+          >
+            <MessageCircle className="w-4 h-4" />
+            Talk to Lurisa
+          </Link>
+          <Link
+            href="/chat"
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white dark:bg-indigo-800 border border-stone-200 dark:border-indigo-700 text-stone-600 dark:text-parchment-300 text-sm hover:bg-stone-50 dark:hover:bg-indigo-700 transition-colors"
+          >
+            <Search className="w-3.5 h-3.5" />
+            Research something
+          </Link>
+          <Link
+            href="/goals"
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white dark:bg-indigo-800 border border-stone-200 dark:border-indigo-700 text-stone-600 dark:text-parchment-300 text-sm hover:bg-stone-50 dark:hover:bg-indigo-700 transition-colors"
+          >
+            <Target className="w-3.5 h-3.5" />
+            Plan something
+          </Link>
         </div>
-      </div>
+      </section>
     </div>
   );
 }
-
-function StatCard({ icon, label, value, href }: { icon: React.ReactNode; label: string; value: number | null; href: string }) {
-  return (
-    <Link href={href}>
-      <Card className="border-parchment-700/30 dark:border-indigo-800/30 hover:journal-shadow-lg transition-shadow cursor-pointer">
-        <CardContent className="p-6">
-          <div className="flex items-center justify-between">
-            <div className="space-y-2">
-              <p className="text-sm text-charcoal-500 dark:text-parchment-300">{label}</p>
-              {value === null ? <Skeleton className="h-8 w-16" /> : <p className="text-3xl font-serif text-indigo-500 dark:text-indigo-300">{value}</p>}
-            </div>
-            <div className="h-10 w-10 rounded-lg bg-parchment-500/50 dark:bg-indigo-800/50 flex items-center justify-center">{icon}</div>
-          </div>
-        </CardContent>
-      </Card>
-    </Link>
-  );
-}
-
