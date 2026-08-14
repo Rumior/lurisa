@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { useState, useRef, useEffect } from 'react';
 
@@ -23,12 +23,7 @@ interface ChatInterfaceProps {
   userId?: string;
 }
 
-const SUGGESTIONS = [
-  "What's been on your mind recently?",
-  "Tell me about something you're looking forward to.",
-  "What made today meaningful?",
-  "How are you feeling right now?",
-];
+const SUGGESTIONS = [];
 
 export function ChatInterface({ userId }: ChatInterfaceProps) {
   const [messages, setMessages] = useState<Message[]>([]);

@@ -1,16 +1,8 @@
-﻿export type StarterType = 'morning' | 'evening' | 'goal' | 'curiosity' | 'reflection';
+export type StarterType = 'morning' | 'evening' | 'goal' | 'curiosity' | 'reflection';
 
 const STARTERS: Record<StarterType, string[]> = {
-  morning: [
-    "Good morning. What's one thing you're looking forward to today?",
-    "Morning. What's on your mind as you start the day?",
-    "Hey. Any goals for today?",
-  ],
-  evening: [
-    "Evening. What was the best part of your day?",
-    "As you wind down, what's one thing from today worth remembering?",
-    "How did today go compared to what you expected?",
-  ],
+  morning: [],
+  evening: [],
   goal: [
     "How's progress on the things you're working toward?",
     "What's one small step you could take today on something that matters to you?",

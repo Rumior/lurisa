@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
@@ -155,9 +155,9 @@ export function ChatInterface({ mode = 'chat' }: ChatInterfaceProps) {
   }
 
   const modeConfig = {
-    chat: { icon: <Sparkles className="h-5 w-5" />, title: 'Chat with lurisa', subtitle: 'Share what is on your mind' },
-    morning: { icon: <Sunrise className="h-5 w-5 text-amber-500" />, title: 'Morning Check-in', subtitle: 'How are you feeling today?' },
-    evening: { icon: <Sunset className="h-5 w-5 text-terracotta-500" />, title: 'Evening Reflection', subtitle: 'What did today teach you?' },
+    chat: { icon: <Sparkles className="h-5 w-5" />, title: 'Chat with lurisa', subtitle: '' },
+    morning: { icon: <Sunrise className="h-5 w-5 text-amber-500" />, title: 'Morning Check-in', subtitle: '' },
+    evening: { icon: <Sunset className="h-5 w-5 text-terracotta-500" />, title: 'Evening Reflection', subtitle: '' },
   };
 
   const config = modeConfig[mode];
