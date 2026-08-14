@@ -181,7 +181,7 @@ export async function GET(req: NextRequest) {
       const ci = crossInsights[0];
       noticed = {
         title: ci.description || "A connection across your memories",
-        description: ci.explanation || "",
+        description: ci.description || "",
         evidence: "Based on cross-memory analysis",
         confidence: ci.confidence || 0.6,
         examples: [],
