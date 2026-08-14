@@ -328,6 +328,7 @@ model users {
   sessions              sessions[]
   timeline_events       timeline_events[]
   user_personal_models  user_personal_models?
+  research_sessions     research_sessions[]
   relationship_stages   relationship_stages?
 
   @@index([email])
@@ -495,4 +496,97 @@ enum TriggerType {
   DATE
   RELATIVE
   RECURRENCE
+}
+
+// ============================================================================
+// RESEARCH INTELLIGENCE MODELS
+// ============================================================================
+
+enum ResearchDepth {
+  QUICK
+  DEEP
+  REPORT
+}
+
+enum ResearchStatus {
+  PLANNING
+  SEARCHING
+  ANALYZING
+  SYNTHESIZING
+  COMPLETED
+  FAILED
+}
+
+enum SourceType {
+  PRIMARY
+  SECONDARY
+  TERTIARY
+}
+
+model research_sessions {
+  id                    String           @id @default(uuid())
+  userId                String
+  query                 String
+  objective             String?
+  depth                 ResearchDepth    @default(QUICK)
+  status                ResearchStatus   @default(PLANNING)
+  personalInterpretation String?         @db.Text
+  recommendation        String?          @db.Text
+  createdAt             DateTime         @default(now())
+  updatedAt             DateTime         @updatedAt
+  completedAt           DateTime?
+  users                 users            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sources               research_sources[]
+  findings              research_findings[]
+  contradictions        research_contradictions[]
+
+  @@index([userId])
+  @@index([userId, status])
+  @@index([userId, createdAt])
+}
+
+model research_sources {
+  id              String      @id @default(uuid())
+  sessionId       String
+  title           String
+  url             String
+  publisher       String?
+  author          String?
+  publishedDate   DateTime?
+  sourceType      SourceType  @default(SECONDARY)
+  credibilityScore Float      @default(0.5)
+  relevanceScore  Float       @default(0.5)
+  content         String?     @db.Text
+  rawClaims       String?     @db.Text
+  session         research_sessions @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId])
+  @@index([sessionId, relevanceScore])
+}
+
+model research_findings {
+  id              String      @id @default(uuid())
+  sessionId       String
+  category        String
+  finding         String      @db.Text
+  confidence      Float       @default(0.5)
+  sourceIds       String[]
+  personalRelevance String?   @db.Text
+  session         research_sessions @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId])
+  @@index([sessionId, category])
+}
+
+model research_contradictions {
+  id              String      @id @default(uuid())
+  sessionId       String
+  claimA          String      @db.Text
+  claimB          String      @db.Text
+  sourceAId       String
+  sourceBId       String
+  explanation     String      @db.Text
+  session         research_sessions @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId])
 }

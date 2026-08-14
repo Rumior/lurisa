@@ -1,10 +1,9 @@
-﻿import { prisma } from './db';
+import { prisma } from './db';
 import { redis, redisKeys } from './redis';
 import { searchMemoriesByVector } from './vector-search';
 import { getMemoriesByEntityProximity, getLinkedMemories } from './graph-queries';
 import { rankMemories } from './scoring';
 import { checkPendingIntents, matchIntentToMessage } from './follow-up';
-import { getRecentResearchContext } from '@/lib/research/engine';
 
 interface RetrievedMemory {
   id: string;
@@ -90,8 +89,6 @@ export async function assembleContext(userId: string, conversationId: string, cu
   const memoryContext = selectedMemories.length > 0
     ? `\n\nRELEVANT MEMORIES:\n${selectedMemories.map((m, i) => `${i + 1}. [${m.category}] ${m.statement}`).join('\n')}`
     : '';
-
-  const researchContext = await getRecentResearchContext(userId, 2);
 
   const intentContext = intentMatch?.matched
     ? `\n\nThe user is responding to a follow-up about: ${pendingIntents.find(p => p.id === intentMatch?.intentId)?.memory?.statement || 'a previous topic'}`

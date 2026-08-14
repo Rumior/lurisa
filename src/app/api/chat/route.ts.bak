@@ -7,8 +7,6 @@ import { buildGoalContext, injectGoalContext } from '@/lib/goals/chat-context';
 import { detectMilestone } from '@/lib/timeline/milestones';
 import { prisma } from '@/lib/db';
 import { handleApiError, withRetry } from '@/lib/error-handler';
-import { detectResearchIntent, executeQuickResearch, executeDeepResearch } from '@/lib/research/engine';
-import { saveResearchAsMemories } from '@/lib/research/memory';
 
 export async function POST(req: NextRequest) {
   try {
@@ -103,82 +101,6 @@ export async function POST(req: NextRequest) {
       content: m.content,
     }));
 
-    // ============================================================================
-    // RESEARCH INTELLIGENCE INTEGRATION
-    // ============================================================================
-    let researchResult: Awaited<ReturnType<typeof executeQuickResearch>> | null = null;
-    let researchSessionId: string | null = null;
-    let researchMeta: { triggered: boolean; depth?: string; saved?: boolean } = { triggered: false };
-
-    try {
-      const researchCheck = await detectResearchIntent(message, fullHistory);
-      
-      if (researchCheck?.isResearch) {
-        researchMeta = { triggered: true, depth: researchCheck.depth };
-
-        if (researchCheck.depth === 'QUICK') {
-          console.log(`[CHAT] Quick research triggered for user ${token.id}: ${researchCheck.objective}`);
-          researchResult = await executeQuickResearch(token.id, message, researchCheck.objective);
-          
-          intentContext += `\n\nRESEARCH FINDINGS (executed for the user):\n${researchResult.summary}\n\nKey findings:\n${researchResult.findings.map(f => `- [${f.category}] ${f.finding} (confidence: ${Math.round(f.confidence * 100)}%)`).join('\n')}`;
-          
-          if (researchResult.contradictions.length > 0) {
-            intentContext += `\n\nContradictions found:\n${researchResult.contradictions.map(c => `- ${c.explanation}`).join('\n')}`;
-          }
-          
-          if (researchResult.personalInterpretation) {
-            intentContext += `\n\nPersonal interpretation: ${researchResult.personalInterpretation}`;
-          }
-          
-          if (researchResult.recommendation) {
-            intentContext += `\n\nRecommendation: ${researchResult.recommendation}`;
-          }
-        } else {
-          console.log(`[CHAT] Deep research triggered for user ${token.id}: ${researchCheck.objective}`);
-          const session = await executeDeepResearch(token.id, message, researchCheck.objective);
-          researchSessionId = session.id;
-          
-          const researchResponse = `I'm doing ${researchCheck.depth?.toLowerCase()} research on "${researchCheck.objective}". I'm analyzing multiple sources, extracting evidence, and cross-checking for contradictions. You can follow my progress in the Research section.`;
-          
-          await withRetry(
-            () => prisma.messages.create({
-              data: {
-                conversationId: convId,
-                userId: token.id,
-                role: 'ASSISTANT',
-                content: researchResponse,
-              },
-            }),
-            { maxRetries: 2, baseDelayMs: 100 }
-          );
-
-          return NextResponse.json({
-            response: researchResponse,
-            conversationId: convId,
-            meta: {
-              qualityScore: 1,
-              retriesUsed: 0,
-              fallback: false,
-              intentResolved,
-              mode: 'ANALYTICAL',
-              emotion: 'CURIOUS',
-              research: {
-                triggered: true,
-                depth: researchCheck.depth,
-                sessionId: session.id,
-                status: session.status,
-              },
-            },
-          });
-        }
-      }
-    } catch (err) {
-      console.error('[CHAT] Research detection/execution error (non-blocking):', err);
-    }
-    // ============================================================================
-    // END RESEARCH INTEGRATION
-    // ============================================================================
-
     const result = await processConversationTurn({
       message: intentContext ? `${intentContext}\n\n${message}` : message,
       userId: token.id,
@@ -202,17 +124,6 @@ export async function POST(req: NextRequest) {
       console.error('[CHAT] Memory extraction error (non-blocking):', err);
     });
 
-    if (researchResult && researchMeta.triggered && researchMeta.depth === 'QUICK') {
-      saveResearchAsMemories(token.id, convId, message, researchResult.findings, researchResult.recommendation)
-        .then(() => {
-          console.log(`[CHAT] Research findings saved as memories for user ${token.id}`);
-          researchMeta.saved = true;
-        })
-        .catch((err) => {
-          console.error('[CHAT] Failed to save research memories (non-blocking):', err);
-        });
-    }
-
     return NextResponse.json({
       response: result.response,
       conversationId: convId,
@@ -223,12 +134,6 @@ export async function POST(req: NextRequest) {
         intentResolved,
         mode: result.mode,
         emotion: result.emotion,
-        research: researchMeta.triggered ? {
-          triggered: true,
-          depth: researchMeta.depth,
-          saved: researchMeta.saved || false,
-          sessionId: researchSessionId || undefined,
-        } : undefined,
       },
     });
 

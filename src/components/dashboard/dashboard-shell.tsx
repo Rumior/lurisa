@@ -1,10 +1,10 @@
-'use client';
+﻿'use client';
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { signOut } from 'next-auth/react';
-import { MessageCircle, Brain, Target, Clock, Settings, LogOut, Menu, X, Moon, Sun, Bell, Lightbulb } from 'lucide-react';
+import { MessageCircle, Brain, Target, Clock, Settings, LogOut, Menu, X, Moon, Sun, Bell, Lightbulb, BookOpen } from 'lucide-react';
 import { Avatar } from '@/components/ui/avatar';
 import { useTheme } from 'next-themes';
 
@@ -20,6 +20,7 @@ const navigation = [
   { name: 'Goals', href: '/goals', icon: Target },
   { name: 'Timeline', href: '/timeline', icon: Clock },
   { name: 'Notifications', href: '/notifications', icon: Bell },
+  { name: 'Research', href: '/research', icon: BookOpen },
   { name: 'Settings', href: '/settings', icon: Settings },
 ];
 
