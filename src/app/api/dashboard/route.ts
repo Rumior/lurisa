@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+﻿import { NextRequest, NextResponse } from "next/server";
 import { getToken } from "next-auth/jwt";
 import { prisma } from "@/lib/db";
 import { detectPatterns } from "@/lib/insights/patterns";
@@ -85,14 +85,14 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
-    // â”€â”€ Compute greeting â”€â”€
+    // Ã¢â€â‚¬Ã¢â€â‚¬ Compute greeting Ã¢â€â‚¬Ã¢â€â‚¬
     const hour = now.getHours();
     let greeting = "Good evening";
     if (hour < 12) greeting = "Good morning";
     else if (hour < 17) greeting = "Good afternoon";
     const userName = user.name?.split(" ")[0] || "there";
 
-    // â”€â”€ Compute "Today" priorities â”€â”€
+    // Ã¢â€â‚¬Ã¢â€â‚¬ Compute "Today" priorities Ã¢â€â‚¬Ã¢â€â‚¬
     const priorities: any[] = [];
 
     // Urgent goals (due within 3 days or overdue)
@@ -131,7 +131,7 @@ export async function GET(req: NextRequest) {
         type: "research",
         id: r.id,
         title: r.objective || r.query,
-        subtitle: `${r.depth.toLowerCase()} research Â· ${r.status.toLowerCase()}`,
+        subtitle: `${r.depth.toLowerCase()} research Ã‚Â· ${r.status.toLowerCase()}`,
         href: "/research",
         urgency: "medium",
         dueText: "In progress",
@@ -157,7 +157,7 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // â”€â”€ Compute subtitle â”€â”€
+    // Ã¢â€â‚¬Ã¢â€â‚¬ Compute subtitle Ã¢â€â‚¬Ã¢â€â‚¬
     const urgentCount = priorities.filter((p) => p.urgency === "critical" || p.urgency === "high" || p.urgency === "overdue").length;
     let subtitle = "Here's what matters right now.";
     if (urgentCount === 1) subtitle = "You have 1 important thing today.";
@@ -166,7 +166,7 @@ export async function GET(req: NextRequest) {
     else if (activeResearch.length > 0) subtitle = "Your research is in progress.";
     else subtitle = "Everything is calm. What would you like to work on?";
 
-    // â”€â”€ Compute "Something I've Noticed" â”€â”€
+    // Ã¢â€â‚¬Ã¢â€â‚¬ Compute "Something I've Noticed" Ã¢â€â‚¬Ã¢â€â‚¬
     let noticed: any = null;
     const topPattern = patterns?.[0];
     if (topPattern && topPattern.confidence >= 0.55) {
@@ -180,7 +180,7 @@ export async function GET(req: NextRequest) {
     } else if (crossInsights?.[0]) {
       const ci = crossInsights[0];
       noticed = {
-        title: ci.insight || "A connection across your memories",
+        title: ci.description || "A connection across your memories",
         description: ci.explanation || "",
         evidence: "Based on cross-memory analysis",
         confidence: ci.confidence || 0.6,
@@ -188,7 +188,7 @@ export async function GET(req: NextRequest) {
       };
     }
 
-    // â”€â”€ Recent Life â”€â”€
+    // Ã¢â€â‚¬Ã¢â€â‚¬ Recent Life Ã¢â€â‚¬Ã¢â€â‚¬
     const recentLife: any[] = [];
 
     researchSessions
@@ -229,7 +229,7 @@ export async function GET(req: NextRequest) {
     recentLife.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     const dedupedLife = recentLife.slice(0, 8);
 
-    // â”€â”€ Active "projects" (goals + research) â”€â”€
+    // Ã¢â€â‚¬Ã¢â€â‚¬ Active "projects" (goals + research) Ã¢â€â‚¬Ã¢â€â‚¬
     const projects: any[] = [];
     activeGoals.slice(0, 3).forEach((g) => {
       const daysUntil = g.targetDate
