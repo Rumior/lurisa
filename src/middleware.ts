@@ -1,4 +1,4 @@
-﻿import { NextResponse, NextRequest } from 'next/server';
+import { NextResponse, NextRequest } from 'next/server';
 import { getToken } from 'next-auth/jwt';
 
 export async function middleware(req: NextRequest) {
@@ -24,5 +24,5 @@ export async function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|public|robots.txt).*)'],
+  matcher: ['/((?!_next/static|_next/image|favicon.ico|public|robots.txt|sw.js|manifest.json).*)'],
 };
