@@ -23,7 +23,7 @@ interface ChatInterfaceProps {
   userId?: string;
 }
 
-const SUGGESTIONS = [];
+const SUGGESTIONS: string[] = [];
 
 export function ChatInterface({ userId }: ChatInterfaceProps) {
   const [messages, setMessages] = useState<Message[]>([]);
