@@ -10,9 +10,9 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
-  // Redirect authenticated users away from auth pages
+  // Redirect authenticated users away from auth pages to dashboard
   if (token && (pathname === '/login' || pathname === '/register')) {
-    return NextResponse.redirect(new URL('/chat', req.url));
+    return NextResponse.redirect(new URL('/', req.url));
   }
 
   // Redirect unauthenticated users to login

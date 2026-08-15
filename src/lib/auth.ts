@@ -200,6 +200,18 @@ export const authOptions: NextAuthOptions = {
   },
 
   callbacks: {
+    async redirect({ url, baseUrl }) {
+      // After login, always go to dashboard
+      if (url === baseUrl + '/login' || url === baseUrl + '/register' || url === '/login' || url === '/register') {
+        return baseUrl + '/';
+      }
+      // Allows relative callback URLs
+      if (url.startsWith('/')) return `${baseUrl}${url}`;
+      // Allows callback URLs on the same origin
+      if (new URL(url).origin === baseUrl) return url;
+      return baseUrl;
+    },
+
     async jwt({ token, user }) {
       if (user) {
         token.id = user.id;
