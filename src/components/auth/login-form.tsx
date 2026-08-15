@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { useState } from 'react';
 import { signIn } from 'next-auth/react';
@@ -37,7 +37,7 @@ export function LoginForm() {
         console.error('[LOGIN] NextAuth error:', result.error);
         setError(result.error === 'CredentialsSignin' ? 'Invalid email or password' : 'Auth error: ' + result.error);
       } else {
-        router.push('/chat');
+        router.push('/');
         router.refresh();
       }
     } catch {
