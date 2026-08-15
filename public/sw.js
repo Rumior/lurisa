@@ -1,7 +1,6 @@
 const CACHE_NAME = "lurisa-v1";
 const STATIC_ASSETS = ["/","/chat","/memories","/goals","/timeline","/manifest.json"];
 
-// Disable aggressive caching in development
 const isDev = self.location.hostname === 'localhost' || self.location.hostname === '127.0.0.1';
 
 self.addEventListener("install", (event) => {
@@ -29,24 +28,22 @@ self.addEventListener("activate", (event) => {
 });
 
 self.addEventListener("fetch", (event) => {
-  // In dev mode, never intercept - let Next.js HMR work properly
   if (isDev) return;
 
   const { request } = event;
   const url = new URL(request.url);
 
-  // Never intercept API calls
   if (url.pathname.startsWith("/api/")) return;
-  // Never intercept Next.js internal chunks/assets
   if (url.pathname.startsWith("/_next/")) return;
-  // Only handle GET requests
   if (request.method !== "GET") return;
 
-  // Stale-while-revalidate for app pages
+  // FIX: Force fetch to follow redirects inside the SW
+  const fetchRequest = new Request(request, { redirect: 'follow' });
+
   if (["/memories","/goals","/timeline"].includes(url.pathname)) {
     event.respondWith(
       caches.match(request).then((cached) => {
-        const fetchPromise = fetch(request).then((res) => {
+        const fetchPromise = fetch(fetchRequest).then((res) => {
           if (res.ok) {
             const clone = res.clone();
             caches.open(CACHE_NAME).then((c) => c.put(request, clone));
@@ -59,12 +56,11 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Cache-first for everything else (but not _next/*)
   event.respondWith(
     caches.match(request).then((cached) => {
       return (
         cached ||
-        fetch(request).then((res) => {
+        fetch(fetchRequest).then((res) => {
           if (res.ok) {
             const clone = res.clone();
             caches.open(CACHE_NAME).then((c) => c.put(request, clone));
