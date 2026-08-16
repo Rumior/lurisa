@@ -20,8 +20,8 @@ import { trackFeedImpression } from '@/lib/global-updates/analytics';
 
 const WORKER_LOCK_KEY = 'global-updates:worker:lock';
 const WORKER_LOCK_TTL = 600;
-const RANKING_BATCH_SIZE = 100; // Users per batch
-const EVENT_BATCH_SIZE = 500;   // Events per batch
+const RANKING_BATCH_SIZE = 100;
+const EVENT_BATCH_SIZE = 500;
 
 async function runGlobalUpdatesPipeline() {
   const lock = await redis.set(WORKER_LOCK_KEY, '1', 'EX', WORKER_LOCK_TTL, 'NX');
@@ -34,12 +34,10 @@ async function runGlobalUpdatesPipeline() {
   const startTime = Date.now();
 
   try {
-    // === STEP 1: DISCOVERY ===
     const articles = await discoverNewArticles();
     if (articles.length === 0) {
       console.log('[GU Worker] No new articles discovered.');
     } else {
-      // === STEP 2: DEDUPLICATION & CLUSTERING ===
       const uniqueArticles: typeof articles = [];
       for (const article of articles) {
         const urlCheck = validateSourceUrl(article.url);
@@ -58,19 +56,13 @@ async function runGlobalUpdatesPipeline() {
       const clusters = await clusterArticles(uniqueArticles);
       console.log(`[GU Worker] ${clusters.size} clusters from ${uniqueArticles.length} unique articles.`);
 
-      // === STEP 3: PROCESS EACH CLUSTER ===
       for (const [clusterId, clusterArticles] of Array.from(clusters)) {
         await processCluster(clusterId, clusterArticles);
       }
     }
 
-    // === STEP 4: COMPUTE PERSONALISED RANKINGS (BATCHED) ===
     await computeAllUserRankingsBatched();
-
-    // === STEP 5: UPDATE TRENDING VELOCITY ===
     await updateTrendingVelocity();
-
-    // Mark worker run time
     await redis.set('global-updates:last-worker-run', Date.now().toString());
 
     const duration = Date.now() - startTime;
@@ -97,7 +89,21 @@ async function processCluster(clusterId: string, articles: any[]) {
 
     if (sources.length === 0) return;
 
+    // === HARD GATE 1: Minimum source count ===
+    if (sources.length < 2) {
+      console.log(`[GU Worker] Cluster ${clusterId} has only ${sources.length} source(s). Insufficient for Global Update. Skipping.`);
+      return;
+    }
+
     const verification = verifySources(sources);
+
+    // === HARD GATE 2: Must be corroborated ===
+    const uniquePublishers = new Set(sources.map((s) => s.publisher).filter(Boolean)).size;
+    if (!verification.isCorroborated) {
+      console.log(`[GU Worker] Cluster ${clusterId} not corroborated (${verification.primaryCount} primary, ${verification.secondaryCount} secondary, ${uniquePublishers} unique publishers). Skipping.`);
+      return;
+    }
+
     const contradictions = await findContradictions(sources);
     const africanMeta = detectAfricanRelevance({
       ...articles[0],
@@ -105,18 +111,19 @@ async function processCluster(clusterId: string, articles: any[]) {
     });
 
     const countries = sources.map((s) => s.country).filter((c): c is string => !!c);
-const uniqueCountries = Array.from(new Set(countries));
+    const uniqueCountries = Array.from(new Set(countries));
 
-const significance = calculateSignificance({
-  sources,
-  eventType: 'ANALYSIS',
-  geographicScope: [...uniqueCountries, ...africanMeta.matchedCountries],
+    const significance = calculateSignificance({
+      sources,
+      eventType: 'ANALYSIS',
+      geographicScope: [...uniqueCountries, ...africanMeta.matchedCountries],
       speedOfDevelopment: 0.5,
       persistence: 0.5,
     });
 
+    // === HARD GATE 3: Must exceed significance threshold ===
     if (significance < SIGNIFICANCE_THRESHOLD) {
-      console.log(`[GU Worker] Cluster ${clusterId} below significance threshold (${significance.toFixed(2)}). Skipping.`);
+      console.log(`[GU Worker] Cluster ${clusterId} below significance threshold (${significance.toFixed(2)} < ${SIGNIFICANCE_THRESHOLD}). Skipping.`);
       return;
     }
 
@@ -152,7 +159,6 @@ const significance = calculateSignificance({
       },
     });
 
-    // Link sources to event
     await prisma.global_event_sources.updateMany({
       where: { id: { in: sources.map((s) => s.sourceId) } },
       data: { eventId: event.id },
@@ -164,12 +170,8 @@ const significance = calculateSignificance({
   }
 }
 
-/**
- * IMPROVED: Batch ranking computation to avoid O(n×m) memory explosion.
- * Processes users in batches and only ranks against recent/active events.
- */
 async function computeAllUserRankingsBatched() {
-  const activeEventCutoff = new Date(Date.now() - 1000 * 60 * 60 * 24 * 7); // 7 days
+  const activeEventCutoff = new Date(Date.now() - 1000 * 60 * 60 * 24 * 7);
 
   const totalUsers = await prisma.users.count();
   const totalEvents = await prisma.global_events.count({
@@ -281,15 +283,11 @@ async function computeAllUserRankingsBatched() {
   console.log(`[GU Worker] ${totalRankings} rankings computed.`);
 }
 
-/**
- * Compute trending velocity for recent events.
- * Stores velocity score in Redis for the trending tab to use.
- */
 async function updateTrendingVelocity() {
   const recentEvents = await prisma.global_events.findMany({
     where: {
       status: 'ACTIVE',
-      latestUpdateAt: { gte: new Date(Date.now() - 1000 * 60 * 60 * 48) }, // 48h
+      latestUpdateAt: { gte: new Date(Date.now() - 1000 * 60 * 60 * 48) },
     },
     select: { id: true, sourceCount: true, importanceScore: true, firstDetectedAt: true },
   });
@@ -297,7 +295,6 @@ async function updateTrendingVelocity() {
   for (const event of recentEvents) {
     const hoursSinceDetection = (Date.now() - event.firstDetectedAt.getTime()) / (1000 * 60 * 60);
     const sourcesPerHour = hoursSinceDetection > 0 ? event.sourceCount / hoursSinceDetection : 0;
-    // Velocity = source accumulation rate × importance
     const velocity = Math.min(1, sourcesPerHour * 0.3 + event.importanceScore * 0.7);
     await redis.setex(`global-updates:velocity:${event.id}`, 3600, velocity.toString());
   }
@@ -305,7 +302,6 @@ async function updateTrendingVelocity() {
   console.log(`[GU Worker] Velocity updated for ${recentEvents.length} events.`);
 }
 
-// Run if called directly
 if (require.main === module) {
   runGlobalUpdatesPipeline()
     .then(() => process.exit(0))
