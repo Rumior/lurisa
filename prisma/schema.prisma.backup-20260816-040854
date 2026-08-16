@@ -1,4 +1,4 @@
-generator client {
+﻿generator client {
   provider = "prisma-client-js"
 }
 
@@ -680,7 +680,6 @@ model global_events {
   analytics global_update_analytics[]
   rankings  global_update_rankings[]
 
-    @@index([status, latestUpdateAt])
   @@index([status, importanceScore])
   @@index([eventType, status])
   @@index([topics])
@@ -751,12 +750,12 @@ model user_interests {
 model saved_global_updates {
   id              String   @id @default(uuid())
   userId          String
-  eventId         String?
+  eventId         String
   reasonForSaving String?  @db.Text
   savedAt         DateTime @default(now())
 
   users users         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  event global_events ? @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  event global_events @relation(fields: [eventId], references: [id], onDelete: Cascade)
 
   @@unique([userId, eventId])
   @@index([userId])

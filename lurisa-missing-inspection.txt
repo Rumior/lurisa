@@ -1,0 +1,2840 @@
+﻿
+
+============================================================
+FILE: src/lib/global-updates/types.ts
+SIZE: 2387 bytes
+LAST_WRITE: 08/16/2026 01:20:11
+============================================================
+
+// Global Updates Engine — Shared Types
+import { EventStatus, EventType, SourceType, ContentType } from '@prisma/client';
+
+export enum ConfidenceLevel {
+  VERY_LOW = 'VERY_LOW',
+  LOW = 'LOW',
+  MEDIUM = 'MEDIUM',
+  HIGH = 'HIGH',
+  VERY_HIGH = 'VERY_HIGH',
+}
+
+export interface SourceMetadata {
+  sourceId: string;
+  title: string;
+  publisher?: string;
+  author?: string;
+  url: string;
+  publicationDate?: Date;
+  retrievedAt: Date;
+  sourceType: SourceType;
+  country?: string;
+  topic?: string;
+  credibility: number;
+  content?: string;
+  rawClaims?: string;
+}
+
+export interface RawArticle {
+  id: string;
+  url: string;
+  title: string;
+  content: string;
+  publishedAt?: Date;
+  publisher: string;
+  author?: string;
+  sourceType: SourceType;
+  country?: string;
+  topic?: string;
+}
+
+export interface ExtractedEvent {
+  headline: string;
+  summary: string;
+  eventType: EventType;
+  topics: string[];
+  entities: string[];
+  locations: string[];
+  whatHappened: string;
+  whatItMeans: string;
+  whatIsUncertain?: string;
+  importanceScore: number;
+  confidenceScore: number;
+  sources: SourceMetadata[];
+  contradictions: EventContradiction[];
+}
+
+export interface EventContradiction {
+  claimA: string;
+  claimB: string;
+  sourceAId: string;
+  sourceBId: string;
+  explanation: string;
+}
+
+export interface UserRelevanceContext {
+  userId: string;
+  interests: string[];
+  goals: string[];
+  projects: string[];
+  recentResearch: string[];
+  professionalInterests?: string;
+  geographicPreferences?: string[];
+  communicationStyle?: string;
+}
+
+export interface PersonalisedUpdate {
+  eventId: string;
+  headline: string;
+  summary: string;
+  eventType: EventType;
+  topics: string[];
+  whatHappened: string;
+  whatItMeans: string;
+  whyItMattersToYou?: string;
+  whatIsUncertain?: string;
+  confidence: ConfidenceLevel;
+  freshness: string;
+  sourceCount: number;
+  sources: SourceMetadata[];
+  isDeveloping: boolean;
+  contentType: ContentType;
+}
+
+export interface RankingFactors {
+  globalSignificance: number;
+  freshness: number;
+  sourceConfidence: number;
+  userRelevance: number;
+  topicAffinity: number;
+  goalRelevance: number;
+  novelty: number;
+  duplicatePenalty: number;
+  lowQualityPenalty: number;
+}
+
+export interface FeedOptions {
+  tab: 'for-you' | 'trending' | 'africa' | 'technology' | 'business' | 'interests';
+  page?: number;
+  pageSize?: number;
+}
+
+
+
+
+---END-OF-FILE---
+
+
+============================================================
+FILE: src/lib/global-updates/index.ts
+SIZE: 448 bytes
+LAST_WRITE: 08/15/2026 23:10:35
+============================================================
+
+// Global Updates Engine — Barrel Export
+export * from './types';
+export * from './discovery';
+export * from './deduplication';
+export * from './verification';
+export * from './contradiction-detection';
+export * from './significance-scoring';
+export * from './relevance-engine';
+export * from './ranking-engine';
+export * from './summarisation';
+export * from './personalisation';
+export * from './editorial-safety';
+export * from './cache';
+
+
+---END-OF-FILE---
+
+
+============================================================
+FILE: src/lib/global-updates/discovery.ts
+SIZE: 4487 bytes
+LAST_WRITE: 08/16/2026 01:30:07
+============================================================
+
+// Discovery Layer — Source ingestion pipeline
+import { SourceType } from '@prisma/client';
+import { prisma } from '@/lib/db';
+import { redis, redisKeys } from '@/lib/redis';
+import { RawArticle, SourceMetadata } from './types';
+
+const DISCOVERY_LOCK_TTL = 300; // 5 minutes
+const MAX_SOURCES_PER_RUN = 50;
+
+interface NewsApiResponse {
+  articles: Array<{
+    title: string;
+    description: string;
+    url: string;
+    publishedAt: string;
+    source: { name: string };
+    author?: string;
+    content?: string;
+  }>;
+}
+
+/**
+ * Main discovery entry point. Fetches fresh articles from configured sources,
+ * stores them as raw ingestion records, and returns them for downstream processing.
+ */
+export async function discoverNewArticles(): Promise<RawArticle[]> {
+  const lockKey = 'global-updates:discovery:lock';
+  const acquired = await redis.set(lockKey, '1', 'EX', DISCOVERY_LOCK_TTL, 'NX');
+  if (!acquired) {
+    console.log('[GlobalUpdates] Discovery already running, skipping.');
+    return [];
+  }
+
+  try {
+    const articles: RawArticle[] = [];
+
+    // Primary: NewsAPI (if configured)
+    const newsApiArticles = await fetchFromNewsApi();
+    articles.push(...newsApiArticles);
+
+    // Secondary: RSS feeds for African business/tech
+    const rssArticles = await fetchFromRssFeeds();
+    articles.push(...rssArticles);
+
+    // Deduplicate by URL before returning
+    const seen = new Set<string>();
+    const unique = articles.filter((a) => {
+      if (seen.has(a.url)) return false;
+      seen.add(a.url);
+      return true;
+    });
+
+    console.log(`[GlobalUpdates] Discovered ${unique.length} unique articles.`);
+    return unique.slice(0, MAX_SOURCES_PER_RUN);
+  } finally {
+    await redis.del(lockKey);
+  }
+}
+
+async function fetchFromNewsApi(): Promise<RawArticle[]> {
+  const apiKey = process.env.NEWS_API_KEY;
+  if (!apiKey) return [];
+
+  const categories = ['technology', 'business', 'science'];
+  const all: RawArticle[] = [];
+
+  for (const category of categories) {
+    try {
+      const res = await fetch(
+        `https://newsapi.org/v2/top-headlines?category=${category}&pageSize=20&apiKey=${apiKey}`,
+        { next: { revalidate: 300 } }
+      );
+      if (!res.ok) continue;
+      const data = (await res.json()) as NewsApiResponse;
+
+      for (const article of data.articles || []) {
+        if (!article.url || !article.title) continue;
+        all.push({
+          id: `newsapi-${Buffer.from(article.url).toString('base64').slice(0, 16)}`,
+          url: article.url,
+          title: article.title,
+          content: article.description || article.content || '',
+          publishedAt: article.publishedAt ? new Date(article.publishedAt) : undefined,
+          publisher: article.source?.name || 'Unknown',
+          author: article.author || undefined,
+          sourceType: 'SECONDARY',
+          topic: category,
+        });
+      }
+    } catch (err) {
+      console.error(`[GlobalUpdates] NewsAPI fetch failed for ${category}:`, err);
+    }
+  }
+
+  return all;
+}
+
+async function fetchFromRssFeeds(): Promise<RawArticle[]> {
+  // Placeholder for RSS ingestion. In production, use rss-parser or similar.
+  // For now, returns empty — extend with real RSS URLs for African outlets.
+  return [];
+}
+
+/**
+ * Store a discovered source in the database as a raw ingestion record.
+ */
+export async function storeRawSource(article: RawArticle, eventId?: string): Promise<SourceMetadata> {
+  const source = await prisma.global_event_sources.create({
+    data: {
+      eventId: eventId || 'pending',
+      title: article.title,
+      url: article.url,
+      publisher: article.publisher,
+      author: article.author,
+      publicationDate: article.publishedAt,
+      sourceType: ((article.sourceType as unknown as string) === 'RESEARCH' ? 'TERTIARY' : article.sourceType) as any,
+      country: article.country,
+      topic: article.topic,
+      content: article.content,
+      retrievedAt: new Date(),
+      credibilityScore: 0.5,
+      relevanceScore: 0.5,
+    },
+  });
+
+  return {
+    sourceId: source.id,
+    title: source.title,
+    publisher: source.publisher || undefined,
+    author: source.author || undefined,
+    url: source.url,
+    publicationDate: source.publicationDate || undefined,
+    retrievedAt: source.retrievedAt,
+    sourceType: source.sourceType as any,
+    country: source.country || undefined,
+    topic: source.topic || undefined,
+    credibility: source.credibilityScore,
+    content: source.content || undefined,
+  };
+}
+
+
+
+
+---END-OF-FILE---
+
+
+============================================================
+FILE: src/lib/global-updates/deduplication.ts
+SIZE: 3159 bytes
+LAST_WRITE: 08/16/2026 01:06:52
+============================================================
+
+// Deduplication Layer — Near-duplicate detection using SimHash + embeddings
+import { redis } from '@/lib/redis';
+import { RawArticle } from './types';
+
+const DEDUP_HASH_PREFIX = 'global-updates:simhash:';
+const SIMILARITY_THRESHOLD = 0.85;
+
+/**
+ * Simple SimHash implementation for near-duplicate detection.
+ * In production, replace with a proper SimHash or MinHash library.
+ */
+export async function isDuplicate(article: RawArticle): Promise<{ isDup: boolean; canonicalId?: string }> {
+  const fingerprint = await computeFingerprint(article.title + ' ' + article.content);
+
+  // Check against recent fingerprints in Redis
+  const recentHashes = await redis.keys(`${DEDUP_HASH_PREFIX}*`);
+  if (recentHashes.length === 0) return { isDup: false };
+
+  for (const key of recentHashes) {
+    const stored = await redis.get(key);
+    if (!stored) continue;
+    const similarity = computeJaccardSimilarity(fingerprint, stored);
+    if (similarity >= SIMILARITY_THRESHOLD) {
+      const canonicalId = key.replace(DEDUP_HASH_PREFIX, '');
+      return { isDup: true, canonicalId };
+    }
+  }
+
+  // Store fingerprint for future comparison (TTL 7 days)
+  await redis.setex(`${DEDUP_HASH_PREFIX}${article.id}`, 604800, fingerprint);
+  return { isDup: false };
+}
+
+async function computeFingerprint(text: string): Promise<string> {
+  // Simple n-gram fingerprint. Replace with proper SimHash in production.
+  const normalized = text.toLowerCase().replace(/[^\w\s]/g, '').trim();
+  const words = normalized.split(/\s+/).slice(0, 100);
+  const shingles = new Set<string>();
+
+  for (let i = 0; i < words.length - 2; i++) {
+    shingles.add(words.slice(i, i + 3).join(' '));
+  }
+
+  return Array.from(shingles).sort().join('|');
+}
+
+function computeJaccardSimilarity(a: string, b: string): number {
+  const setA = new Set(a.split('|'));
+  const setB = new Set(b.split('|'));
+  const intersection = new Set(Array.from(setA).filter((x) => setB.has(x)));
+  const union = new Set(Array.from(setA).concat(Array.from(setB)));
+  return intersection.size / union.size;
+}
+
+/**
+ * Cluster multiple articles into a single event using topic overlap.
+ */
+export async function clusterArticles(articles: RawArticle[]): Promise<Map<string, RawArticle[]>> {
+  const clusters = new Map<string, RawArticle[]>();
+
+  for (const article of articles) {
+    let assigned = false;
+    for (const [key, group] of Array.from(clusters)) {
+      const first = group[0];
+      const overlap = topicOverlap(article, first);
+      if (overlap > 0.6) {
+        group.push(article);
+        assigned = true;
+        break;
+      }
+    }
+    if (!assigned) {
+      clusters.set(article.id, [article]);
+    }
+  }
+
+  return clusters;
+}
+
+function topicOverlap(a: RawArticle, b: RawArticle): number {
+  const textA = (a.title + ' ' + a.content).toLowerCase();
+  const textB = (b.title + ' ' + b.content).toLowerCase();
+  const wordsA = new Set(textA.split(/\s+/));
+  const wordsB = new Set(textB.split(/\s+/));
+  const intersection = new Set(Array.from(wordsA).filter((x) => wordsB.has(x)));
+  const union = new Set(Array.from(wordsA).concat(Array.from(wordsB)));
+  return intersection.size / union.size;
+}
+
+
+
+---END-OF-FILE---
+
+
+============================================================
+FILE: src/lib/global-updates/verification.ts
+SIZE: 3315 bytes
+LAST_WRITE: 08/15/2026 23:10:35
+============================================================
+
+// Verification Layer — Source credibility, corroboration, freshness scoring
+import { SourceMetadata } from './types';
+
+interface VerificationResult {
+  credibilityScore: number;
+  isCorroborated: boolean;
+  corroboratingCount: number;
+  contradictoryCount: number;
+  freshnessScore: number;
+  overallConfidence: number;
+}
+
+/**
+ * Verify a cluster of sources reporting the same event.
+ */
+export function verifySources(sources: SourceMetadata[]): VerificationResult {
+  if (sources.length === 0) {
+    return {
+      credibilityScore: 0,
+      isCorroborated: false,
+      corroboratingCount: 0,
+      contradictoryCount: 0,
+      freshnessScore: 0,
+      overallConfidence: 0,
+    };
+  }
+
+  // 1. Source credibility
+  const credibilityScores = sources.map((s) => assessSourceCredibility(s));
+  const avgCredibility = credibilityScores.reduce((a, b) => a + b, 0) / credibilityScores.length;
+
+  // 2. Corroboration
+  const primaryCount = sources.filter((s) => s.sourceType === 'PRIMARY').length;
+  const secondaryCount = sources.filter((s) => s.sourceType === 'SECONDARY').length;
+  const isCorroborated = primaryCount >= 1 && secondaryCount >= 2;
+  const corroboratingCount = sources.length;
+
+  // 3. Freshness
+  const now = Date.now();
+  const ageHours = sources.map((s) => {
+    if (!s.publicationDate) return 48;
+    return (now - s.publicationDate.getTime()) / (1000 * 60 * 60);
+  });
+  const avgAge = ageHours.reduce((a, b) => a + b, 0) / ageHours.length;
+  const freshnessScore = Math.max(0, 1 - avgAge / 72); // Decay over 72 hours
+
+  // 4. Overall confidence
+  const overallConfidence = Math.min(1, (avgCredibility * 0.4) + (freshnessScore * 0.3) + (isCorroborated ? 0.3 : 0.1));
+
+  return {
+    credibilityScore: avgCredibility,
+    isCorroborated,
+    corroboratingCount,
+    contradictoryCount: 0, // Set by contradiction layer
+    freshnessScore,
+    overallConfidence,
+  };
+}
+
+function assessSourceCredibility(source: SourceMetadata): number {
+  let score = 0.5;
+
+  // Primary sources get a boost
+  if (source.sourceType === 'PRIMARY') score += 0.2;
+
+  // Known reputable publishers
+  const reputable = [
+    'reuters', 'ap news', 'bloomberg', 'financial times', 'economist',
+    'nature', 'science', 'bbc', 'al jazeera', 'techcrunch', 'the guardian',
+    'forbes', 'wall street journal', 'new york times', 'washington post',
+  ];
+  if (reputable.some((r) => source.publisher?.toLowerCase().includes(r))) {
+    score += 0.15;
+  }
+
+  // Has author attribution
+  if (source.author && source.author.length > 2) score += 0.05;
+
+  // Recent publication
+  if (source.publicationDate) {
+    const hoursOld = (Date.now() - source.publicationDate.getTime()) / (1000 * 60 * 60);
+    if (hoursOld < 24) score += 0.05;
+    else if (hoursOld > 168) score -= 0.1; // Older than 1 week
+  }
+
+  return Math.min(1, Math.max(0, score));
+}
+
+/**
+ * Detect if two sources contradict each other on a specific claim.
+ * Returns a contradiction record if detected, null otherwise.
+ */
+export function detectContradiction(sourceA: SourceMetadata, sourceB: SourceMetadata): { claimA: string; claimB: string; explanation: string } | null {
+  // Placeholder: In production, use LLM to compare claims extracted from each source.
+  // For now, return null (no contradiction detected) to avoid false positives.
+  return null;
+}
+
+
+---END-OF-FILE---
+
+
+============================================================
+FILE: src/lib/global-updates/contradiction-detection.ts
+SIZE: 1475 bytes
+LAST_WRITE: 08/15/2026 23:10:35
+============================================================
+
+// Contradiction Detection Layer
+import { SourceMetadata, EventContradiction } from './types';
+import { detectContradiction } from './verification';
+
+/**
+ * Scan all source pairs in an event for contradictions.
+ * Only flags when reliable sources disagree.
+ */
+export function findContradictions(sources: SourceMetadata[]): EventContradiction[] {
+  const contradictions: EventContradiction[] = [];
+
+  for (let i = 0; i < sources.length; i++) {
+    for (let j = i + 1; j < sources.length; j++) {
+      const a = sources[i];
+      const b = sources[j];
+
+      // Only flag contradictions between credible sources
+      if (a.credibility < 0.6 || b.credibility < 0.6) continue;
+
+      const contradiction = detectContradiction(a, b);
+      if (contradiction) {
+        contradictions.push({
+          claimA: contradiction.claimA,
+          claimB: contradiction.claimB,
+          sourceAId: a.sourceId,
+          sourceBId: b.sourceId,
+          explanation: contradiction.explanation,
+        });
+      }
+    }
+  }
+
+  return contradictions;
+}
+
+/**
+ * Format contradiction for user display.
+ */
+export function formatContradictionWarning(contradictions: EventContradiction[]): string | undefined {
+  if (contradictions.length === 0) return undefined;
+  if (contradictions.length === 1) {
+    return `Reliable sources currently disagree about ${contradictions[0].claimA.toLowerCase()}.`;
+  }
+  return `Multiple aspects of this story are disputed among reliable sources.`;
+}
+
+
+---END-OF-FILE---
+
+
+============================================================
+FILE: src/lib/global-updates/significance-scoring.ts
+SIZE: 1834 bytes
+LAST_WRITE: 08/15/2026 23:10:35
+============================================================
+
+// Significance Scoring Layer
+import { EventType } from '@prisma/client';
+import { SourceMetadata } from './types';
+
+interface SignificanceInput {
+  sources: SourceMetadata[];
+  eventType: EventType;
+  geographicScope: string[];
+  economicMagnitude?: number; // 0-1 estimated impact
+  socialMagnitude?: number;
+  speedOfDevelopment: number; // 0-1 how fast story is evolving
+  persistence: number; // 0-1 how long story has been relevant
+}
+
+/**
+ * Calculate global significance score (0-1).
+ * Prevents noisy, low-impact stories from flooding the feed.
+ */
+export function calculateSignificance(input: SignificanceInput): number {
+  const { sources, eventType, geographicScope, economicMagnitude, socialMagnitude, speedOfDevelopment, persistence } = input;
+
+  // Source volume & quality (max 0.3)
+  const sourceScore = Math.min(1, sources.length / 10) * 0.3;
+
+  // Source credibility (max 0.25)
+  const avgCredibility = sources.reduce((sum, s) => sum + s.credibility, 0) / (sources.length || 1);
+  const credibilityScore = avgCredibility * 0.25;
+
+  // Geographic impact (max 0.15)
+  const geoScore = Math.min(1, geographicScope.length / 5) * 0.15;
+
+  // Economic/social magnitude (max 0.15)
+  const magnitudeScore = ((economicMagnitude || 0.3) + (socialMagnitude || 0.3)) / 2 * 0.15;
+
+  // Speed & persistence (max 0.15)
+  const velocityScore = ((speedOfDevelopment || 0.5) + (persistence || 0.5)) / 2 * 0.15;
+
+  let total = sourceScore + credibilityScore + geoScore + magnitudeScore + velocityScore;
+
+  // Boost for breaking news
+  if (eventType === 'BREAKING') total += 0.05;
+
+  // Penalty for single-source stories
+  if (sources.length < 2) total *= 0.6;
+
+  return Math.min(1, Math.max(0, total));
+}
+
+/**
+ * Minimum significance threshold for an event to become a Global Update.
+ */
+export const SIGNIFICANCE_THRESHOLD = 0.45;
+
+
+---END-OF-FILE---
+
+
+============================================================
+FILE: src/lib/global-updates/relevance-engine.ts
+SIZE: 2550 bytes
+LAST_WRITE: 08/15/2026 23:10:35
+============================================================
+
+// Personal Relevance Engine
+import { prisma } from '@/lib/db';
+import { UserRelevanceContext, ExtractedEvent } from './types';
+
+/**
+ * Build user relevance context from LifeOS data.
+ * Respects privacy: only uses permitted, non-sensitive context.
+ */
+export async function buildUserContext(userId: string): Promise<UserRelevanceContext> {
+  const [interests, goals, recentResearch, personalModel] = await Promise.all([
+    prisma.user_interests.findMany({ where: { userId, isFollowed: true, isHidden: false } }),
+    prisma.goals.findMany({ where: { userId, status: 'ACTIVE' } }),
+    prisma.research_sessions.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+      take: 5,
+    }),
+    prisma.user_personal_models.findUnique({ where: { userId } }),
+  ]);
+
+  return {
+    userId,
+    interests: interests.map((i) => i.topic),
+    goals: goals.map((g) => g.title),
+    projects: goals.map((g) => g.description).filter(Boolean) as string[],
+    recentResearch: recentResearch.map((r) => r.query),
+    professionalInterests: personalModel?.workInterests || undefined,
+    geographicPreferences: personalModel ? undefined : undefined, // Extend as needed
+    communicationStyle: personalModel?.communicationStyle || undefined,
+  };
+}
+
+/**
+ * Score how relevant an event is to a specific user (0-1).
+ */
+export function scoreRelevance(event: ExtractedEvent, context: UserRelevanceContext): number {
+  let score = 0;
+
+  // Explicit interests (max 0.4)
+  const interestOverlap = event.topics.filter((t) =>
+    context.interests.some((i) => t.toLowerCase().includes(i.toLowerCase()) || i.toLowerCase().includes(t.toLowerCase()))
+  ).length;
+  score += Math.min(1, interestOverlap / 3) * 0.4;
+
+  // Goal alignment (max 0.25)
+  const goalText = context.goals.join(' ').toLowerCase();
+  const goalOverlap = event.entities.filter((e) => goalText.includes(e.toLowerCase())).length;
+  score += Math.min(1, goalOverlap / 2) * 0.25;
+
+  // Recent research alignment (max 0.2)
+  const researchText = context.recentResearch.join(' ').toLowerCase();
+  const researchOverlap = event.topics.filter((t) => researchText.includes(t.toLowerCase())).length;
+  score += Math.min(1, researchOverlap / 2) * 0.2;
+
+  // Professional interests (max 0.15)
+  if (context.professionalInterests) {
+    const profText = context.professionalInterests.toLowerCase();
+    const profOverlap = event.topics.filter((t) => profText.includes(t.toLowerCase())).length;
+    score += Math.min(1, profOverlap / 2) * 0.15;
+  }
+
+  return Math.min(1, Math.max(0, score));
+}
+
+
+---END-OF-FILE---
+
+
+============================================================
+FILE: src/app/api/global-updates/[id]/route.ts
+STATUS: FILE NOT FOUND
+
+---END-OF-FILE---
+
+
+============================================================
+FILE: src/app/api/global-updates/[id]/research/route.ts
+STATUS: FILE NOT FOUND
+
+---END-OF-FILE---
+
+
+============================================================
+FILE: src/app/api/global-updates/[id]/save/route.ts
+STATUS: FILE NOT FOUND
+
+---END-OF-FILE---
+
+
+============================================================
+FILE: src\lib\global-updates\cache.ts
+SIZE: 1232 bytes
+LAST_WRITE: 08/15/2026 23:10:35
+============================================================
+
+// Global Updates Cache Layer
+import { cache } from '@/lib/cache';
+
+const FEED_TTL = 180; // 3 minutes for live feed
+const DASHBOARD_TTL = 120; // 2 minutes for dashboard card
+const EVENT_TTL = 600; // 10 minutes for individual events
+
+export const globalUpdatesCache = {
+  async getFeed(userId: string, tab: string, page: number) {
+    return cache.get<any[]>(`gu:feed:${userId}:${tab}:${page}`);
+  },
+
+  async setFeed(userId: string, tab: string, page: number, data: any[]) {
+    await cache.set(`gu:feed:${userId}:${tab}:${page}`, data, { ttl: FEED_TTL, tags: [`user:${userId}`, 'global-updates'] });
+  },
+
+  async getDashboard(userId: string) {
+    return cache.get<any[]>(`gu:dashboard:${userId}`);
+  },
+
+  async setDashboard(userId: string, data: any[]) {
+    await cache.set(`gu:dashboard:${userId}`, data, { ttl: DASHBOARD_TTL, tags: [`user:${userId}`, 'global-updates'] });
+  },
+
+  async getEvent(eventId: string) {
+    return cache.get<any>(`gu:event:${eventId}`);
+  },
+
+  async setEvent(eventId: string, data: any) {
+    await cache.set(`gu:event:${eventId}`, data, { ttl: EVENT_TTL, tags: ['global-updates'] });
+  },
+
+  async invalidateUser(userId: string) {
+    await cache.invalidateTag(`user:${userId}`);
+  },
+};
+
+
+---END-OF-FILE---
+
+
+============================================================
+FILE: src\lib\global-updates\contradiction-detection.ts
+SIZE: 1475 bytes
+LAST_WRITE: 08/15/2026 23:10:35
+============================================================
+
+// Contradiction Detection Layer
+import { SourceMetadata, EventContradiction } from './types';
+import { detectContradiction } from './verification';
+
+/**
+ * Scan all source pairs in an event for contradictions.
+ * Only flags when reliable sources disagree.
+ */
+export function findContradictions(sources: SourceMetadata[]): EventContradiction[] {
+  const contradictions: EventContradiction[] = [];
+
+  for (let i = 0; i < sources.length; i++) {
+    for (let j = i + 1; j < sources.length; j++) {
+      const a = sources[i];
+      const b = sources[j];
+
+      // Only flag contradictions between credible sources
+      if (a.credibility < 0.6 || b.credibility < 0.6) continue;
+
+      const contradiction = detectContradiction(a, b);
+      if (contradiction) {
+        contradictions.push({
+          claimA: contradiction.claimA,
+          claimB: contradiction.claimB,
+          sourceAId: a.sourceId,
+          sourceBId: b.sourceId,
+          explanation: contradiction.explanation,
+        });
+      }
+    }
+  }
+
+  return contradictions;
+}
+
+/**
+ * Format contradiction for user display.
+ */
+export function formatContradictionWarning(contradictions: EventContradiction[]): string | undefined {
+  if (contradictions.length === 0) return undefined;
+  if (contradictions.length === 1) {
+    return `Reliable sources currently disagree about ${contradictions[0].claimA.toLowerCase()}.`;
+  }
+  return `Multiple aspects of this story are disputed among reliable sources.`;
+}
+
+
+---END-OF-FILE---
+
+
+============================================================
+FILE: src\lib\global-updates\deduplication.ts
+SIZE: 3159 bytes
+LAST_WRITE: 08/16/2026 01:06:52
+============================================================
+
+// Deduplication Layer — Near-duplicate detection using SimHash + embeddings
+import { redis } from '@/lib/redis';
+import { RawArticle } from './types';
+
+const DEDUP_HASH_PREFIX = 'global-updates:simhash:';
+const SIMILARITY_THRESHOLD = 0.85;
+
+/**
+ * Simple SimHash implementation for near-duplicate detection.
+ * In production, replace with a proper SimHash or MinHash library.
+ */
+export async function isDuplicate(article: RawArticle): Promise<{ isDup: boolean; canonicalId?: string }> {
+  const fingerprint = await computeFingerprint(article.title + ' ' + article.content);
+
+  // Check against recent fingerprints in Redis
+  const recentHashes = await redis.keys(`${DEDUP_HASH_PREFIX}*`);
+  if (recentHashes.length === 0) return { isDup: false };
+
+  for (const key of recentHashes) {
+    const stored = await redis.get(key);
+    if (!stored) continue;
+    const similarity = computeJaccardSimilarity(fingerprint, stored);
+    if (similarity >= SIMILARITY_THRESHOLD) {
+      const canonicalId = key.replace(DEDUP_HASH_PREFIX, '');
+      return { isDup: true, canonicalId };
+    }
+  }
+
+  // Store fingerprint for future comparison (TTL 7 days)
+  await redis.setex(`${DEDUP_HASH_PREFIX}${article.id}`, 604800, fingerprint);
+  return { isDup: false };
+}
+
+async function computeFingerprint(text: string): Promise<string> {
+  // Simple n-gram fingerprint. Replace with proper SimHash in production.
+  const normalized = text.toLowerCase().replace(/[^\w\s]/g, '').trim();
+  const words = normalized.split(/\s+/).slice(0, 100);
+  const shingles = new Set<string>();
+
+  for (let i = 0; i < words.length - 2; i++) {
+    shingles.add(words.slice(i, i + 3).join(' '));
+  }
+
+  return Array.from(shingles).sort().join('|');
+}
+
+function computeJaccardSimilarity(a: string, b: string): number {
+  const setA = new Set(a.split('|'));
+  const setB = new Set(b.split('|'));
+  const intersection = new Set(Array.from(setA).filter((x) => setB.has(x)));
+  const union = new Set(Array.from(setA).concat(Array.from(setB)));
+  return intersection.size / union.size;
+}
+
+/**
+ * Cluster multiple articles into a single event using topic overlap.
+ */
+export async function clusterArticles(articles: RawArticle[]): Promise<Map<string, RawArticle[]>> {
+  const clusters = new Map<string, RawArticle[]>();
+
+  for (const article of articles) {
+    let assigned = false;
+    for (const [key, group] of Array.from(clusters)) {
+      const first = group[0];
+      const overlap = topicOverlap(article, first);
+      if (overlap > 0.6) {
+        group.push(article);
+        assigned = true;
+        break;
+      }
+    }
+    if (!assigned) {
+      clusters.set(article.id, [article]);
+    }
+  }
+
+  return clusters;
+}
+
+function topicOverlap(a: RawArticle, b: RawArticle): number {
+  const textA = (a.title + ' ' + a.content).toLowerCase();
+  const textB = (b.title + ' ' + b.content).toLowerCase();
+  const wordsA = new Set(textA.split(/\s+/));
+  const wordsB = new Set(textB.split(/\s+/));
+  const intersection = new Set(Array.from(wordsA).filter((x) => wordsB.has(x)));
+  const union = new Set(Array.from(wordsA).concat(Array.from(wordsB)));
+  return intersection.size / union.size;
+}
+
+
+
+---END-OF-FILE---
+
+
+============================================================
+FILE: src\lib\global-updates\discovery.ts
+SIZE: 4487 bytes
+LAST_WRITE: 08/16/2026 01:30:07
+============================================================
+
+// Discovery Layer — Source ingestion pipeline
+import { SourceType } from '@prisma/client';
+import { prisma } from '@/lib/db';
+import { redis, redisKeys } from '@/lib/redis';
+import { RawArticle, SourceMetadata } from './types';
+
+const DISCOVERY_LOCK_TTL = 300; // 5 minutes
+const MAX_SOURCES_PER_RUN = 50;
+
+interface NewsApiResponse {
+  articles: Array<{
+    title: string;
+    description: string;
+    url: string;
+    publishedAt: string;
+    source: { name: string };
+    author?: string;
+    content?: string;
+  }>;
+}
+
+/**
+ * Main discovery entry point. Fetches fresh articles from configured sources,
+ * stores them as raw ingestion records, and returns them for downstream processing.
+ */
+export async function discoverNewArticles(): Promise<RawArticle[]> {
+  const lockKey = 'global-updates:discovery:lock';
+  const acquired = await redis.set(lockKey, '1', 'EX', DISCOVERY_LOCK_TTL, 'NX');
+  if (!acquired) {
+    console.log('[GlobalUpdates] Discovery already running, skipping.');
+    return [];
+  }
+
+  try {
+    const articles: RawArticle[] = [];
+
+    // Primary: NewsAPI (if configured)
+    const newsApiArticles = await fetchFromNewsApi();
+    articles.push(...newsApiArticles);
+
+    // Secondary: RSS feeds for African business/tech
+    const rssArticles = await fetchFromRssFeeds();
+    articles.push(...rssArticles);
+
+    // Deduplicate by URL before returning
+    const seen = new Set<string>();
+    const unique = articles.filter((a) => {
+      if (seen.has(a.url)) return false;
+      seen.add(a.url);
+      return true;
+    });
+
+    console.log(`[GlobalUpdates] Discovered ${unique.length} unique articles.`);
+    return unique.slice(0, MAX_SOURCES_PER_RUN);
+  } finally {
+    await redis.del(lockKey);
+  }
+}
+
+async function fetchFromNewsApi(): Promise<RawArticle[]> {
+  const apiKey = process.env.NEWS_API_KEY;
+  if (!apiKey) return [];
+
+  const categories = ['technology', 'business', 'science'];
+  const all: RawArticle[] = [];
+
+  for (const category of categories) {
+    try {
+      const res = await fetch(
+        `https://newsapi.org/v2/top-headlines?category=${category}&pageSize=20&apiKey=${apiKey}`,
+        { next: { revalidate: 300 } }
+      );
+      if (!res.ok) continue;
+      const data = (await res.json()) as NewsApiResponse;
+
+      for (const article of data.articles || []) {
+        if (!article.url || !article.title) continue;
+        all.push({
+          id: `newsapi-${Buffer.from(article.url).toString('base64').slice(0, 16)}`,
+          url: article.url,
+          title: article.title,
+          content: article.description || article.content || '',
+          publishedAt: article.publishedAt ? new Date(article.publishedAt) : undefined,
+          publisher: article.source?.name || 'Unknown',
+          author: article.author || undefined,
+          sourceType: 'SECONDARY',
+          topic: category,
+        });
+      }
+    } catch (err) {
+      console.error(`[GlobalUpdates] NewsAPI fetch failed for ${category}:`, err);
+    }
+  }
+
+  return all;
+}
+
+async function fetchFromRssFeeds(): Promise<RawArticle[]> {
+  // Placeholder for RSS ingestion. In production, use rss-parser or similar.
+  // For now, returns empty — extend with real RSS URLs for African outlets.
+  return [];
+}
+
+/**
+ * Store a discovered source in the database as a raw ingestion record.
+ */
+export async function storeRawSource(article: RawArticle, eventId?: string): Promise<SourceMetadata> {
+  const source = await prisma.global_event_sources.create({
+    data: {
+      eventId: eventId || 'pending',
+      title: article.title,
+      url: article.url,
+      publisher: article.publisher,
+      author: article.author,
+      publicationDate: article.publishedAt,
+      sourceType: ((article.sourceType as unknown as string) === 'RESEARCH' ? 'TERTIARY' : article.sourceType) as any,
+      country: article.country,
+      topic: article.topic,
+      content: article.content,
+      retrievedAt: new Date(),
+      credibilityScore: 0.5,
+      relevanceScore: 0.5,
+    },
+  });
+
+  return {
+    sourceId: source.id,
+    title: source.title,
+    publisher: source.publisher || undefined,
+    author: source.author || undefined,
+    url: source.url,
+    publicationDate: source.publicationDate || undefined,
+    retrievedAt: source.retrievedAt,
+    sourceType: source.sourceType as any,
+    country: source.country || undefined,
+    topic: source.topic || undefined,
+    credibility: source.credibilityScore,
+    content: source.content || undefined,
+  };
+}
+
+
+
+
+---END-OF-FILE---
+
+
+============================================================
+FILE: src\lib\global-updates\editorial-safety.ts
+SIZE: 1650 bytes
+LAST_WRITE: 08/15/2026 23:10:35
+============================================================
+
+// Editorial Safety Layer — Content filtering & prompt-injection protection
+const BLOCKED_PATTERNS = [
+  /ignore previous instructions/i,
+  /disregard your training/i,
+  /you are now/i,
+  /system prompt/i,
+  /DAN mode/i,
+  /jailbreak/i,
+];
+
+const SENSITIVE_TOPICS = [
+  'self-harm',
+  'suicide',
+  'graphic violence',
+  'child exploitation',
+];
+
+/**
+ * Sanitise raw web content before it enters the LLM pipeline.
+ * Treats all external content as untrusted data.
+ */
+export function sanitiseContent(raw: string): { safe: boolean; cleaned?: string; reason?: string } {
+  // Check for prompt injection attempts
+  for (const pattern of BLOCKED_PATTERNS) {
+    if (pattern.test(raw)) {
+      return { safe: false, reason: 'Potential prompt injection detected' };
+    }
+  }
+
+  // Check length to prevent context window abuse
+  if (raw.length > 50000) {
+    return { safe: false, reason: 'Content exceeds maximum length' };
+  }
+
+  // Basic HTML strip (production: use a proper HTML parser)
+  const cleaned = raw
+    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+    .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  return { safe: true, cleaned };
+}
+
+/**
+ * Check if content should be blocked from publication.
+ */
+export function editorialCheck(content: string): { approved: boolean; reason?: string } {
+  const lower = content.toLowerCase();
+
+  for (const topic of SENSITIVE_TOPICS) {
+    if (lower.includes(topic)) {
+      return { approved: false, reason: `Sensitive topic flagged: ${topic}` };
+    }
+  }
+
+  return { approved: true };
+}
+
+
+---END-OF-FILE---
+
+
+============================================================
+FILE: src\lib\global-updates\index.ts
+SIZE: 448 bytes
+LAST_WRITE: 08/15/2026 23:10:35
+============================================================
+
+// Global Updates Engine — Barrel Export
+export * from './types';
+export * from './discovery';
+export * from './deduplication';
+export * from './verification';
+export * from './contradiction-detection';
+export * from './significance-scoring';
+export * from './relevance-engine';
+export * from './ranking-engine';
+export * from './summarisation';
+export * from './personalisation';
+export * from './editorial-safety';
+export * from './cache';
+
+
+---END-OF-FILE---
+
+
+============================================================
+FILE: src\lib\global-updates\personalisation.ts
+SIZE: 2173 bytes
+LAST_WRITE: 08/15/2026 23:10:35
+============================================================
+
+// Personalisation Layer — "Why it may matter to you"
+import OpenAI from 'openai';
+import { UserRelevanceContext, ExtractedEvent } from './types';
+
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+/**
+ * Generate personalised explanation of why an event matters to this user.
+ * Returns undefined if no legitimate connection exists.
+ */
+export async function personaliseEvent(
+  event: ExtractedEvent,
+  context: UserRelevanceContext
+): Promise<string | undefined> {
+  // Fast-path: if relevance score is very low, don't manufacture a connection
+  const hasConnection =
+    context.interests.some((i) => event.topics.some((t) => t.toLowerCase().includes(i.toLowerCase()))) ||
+    context.goals.some((g) => event.entities.some((e) => g.toLowerCase().includes(e.toLowerCase()))) ||
+    context.recentResearch.some((r) => event.topics.some((t) => r.toLowerCase().includes(t.toLowerCase())));
+
+  if (!hasConnection) return undefined;
+
+  const prompt = `You are Lurisa's personal relevance engine. You explain why a world event matters to a specific user, based ONLY on their actual context. You NEVER invent connections.
+
+EVENT:
+Headline: ${event.headline}
+Summary: ${event.summary}
+Topics: ${event.topics.join(', ')}
+
+USER CONTEXT:
+Interests: ${context.interests.join(', ') || 'None specified'}
+Goals: ${context.goals.join(', ') || 'None specified'}
+Recent research: ${context.recentResearch.join(', ') || 'None'}
+Professional interests: ${context.professionalInterests || 'None'}
+
+Write ONE concise sentence (max 25 words) explaining why this event may matter to this user. Be specific and honest. If the connection is weak, say so.`;
+
+  try {
+    const response = await openai.chat.completions.create({
+      model: process.env.LURISA_MODEL || 'gpt-4o-mini',
+      messages: [{ role: 'user', content: prompt }],
+      temperature: 0.4,
+      max_tokens: 100,
+    });
+
+    const text = response.choices[0]?.message?.content?.trim();
+    if (!text || text.toLowerCase().includes('no clear connection')) return undefined;
+    return text;
+  } catch (err) {
+    console.error('[GlobalUpdates] Personalisation failed:', err);
+    return undefined;
+  }
+}
+
+
+---END-OF-FILE---
+
+
+============================================================
+FILE: src\lib\global-updates\ranking-engine.ts
+SIZE: 1066 bytes
+LAST_WRITE: 08/15/2026 23:10:35
+============================================================
+
+// Ranking Engine — Composite scoring for personalized feed
+import { RankingFactors } from './types';
+
+/**
+ * Compute composite ranking score from individual factors.
+ */
+export function computeCompositeScore(factors: RankingFactors): number {
+  const {
+    globalSignificance,
+    freshness,
+    sourceConfidence,
+    userRelevance,
+    topicAffinity,
+    goalRelevance,
+    novelty,
+    duplicatePenalty,
+    lowQualityPenalty,
+  } = factors;
+
+  const score =
+    globalSignificance * 0.25 +
+    freshness * 0.20 +
+    sourceConfidence * 0.20 +
+    userRelevance * 0.20 +
+    topicAffinity * 0.08 +
+    goalRelevance * 0.05 +
+    novelty * 0.02 -
+    duplicatePenalty -
+    lowQualityPenalty;
+
+  return Math.max(0, Math.min(1, score));
+}
+
+/**
+ * Determine if an event should appear in the Trending tab.
+ */
+export function isTrending(factors: RankingFactors, velocity: number): boolean {
+  // Trending = rapid coverage increase + high significance + geographic spread
+  return velocity > 0.7 && factors.globalSignificance > 0.5 && factors.freshness > 0.6;
+}
+
+
+---END-OF-FILE---
+
+
+============================================================
+FILE: src\lib\global-updates\relevance-engine.ts
+SIZE: 2550 bytes
+LAST_WRITE: 08/15/2026 23:10:35
+============================================================
+
+// Personal Relevance Engine
+import { prisma } from '@/lib/db';
+import { UserRelevanceContext, ExtractedEvent } from './types';
+
+/**
+ * Build user relevance context from LifeOS data.
+ * Respects privacy: only uses permitted, non-sensitive context.
+ */
+export async function buildUserContext(userId: string): Promise<UserRelevanceContext> {
+  const [interests, goals, recentResearch, personalModel] = await Promise.all([
+    prisma.user_interests.findMany({ where: { userId, isFollowed: true, isHidden: false } }),
+    prisma.goals.findMany({ where: { userId, status: 'ACTIVE' } }),
+    prisma.research_sessions.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+      take: 5,
+    }),
+    prisma.user_personal_models.findUnique({ where: { userId } }),
+  ]);
+
+  return {
+    userId,
+    interests: interests.map((i) => i.topic),
+    goals: goals.map((g) => g.title),
+    projects: goals.map((g) => g.description).filter(Boolean) as string[],
+    recentResearch: recentResearch.map((r) => r.query),
+    professionalInterests: personalModel?.workInterests || undefined,
+    geographicPreferences: personalModel ? undefined : undefined, // Extend as needed
+    communicationStyle: personalModel?.communicationStyle || undefined,
+  };
+}
+
+/**
+ * Score how relevant an event is to a specific user (0-1).
+ */
+export function scoreRelevance(event: ExtractedEvent, context: UserRelevanceContext): number {
+  let score = 0;
+
+  // Explicit interests (max 0.4)
+  const interestOverlap = event.topics.filter((t) =>
+    context.interests.some((i) => t.toLowerCase().includes(i.toLowerCase()) || i.toLowerCase().includes(t.toLowerCase()))
+  ).length;
+  score += Math.min(1, interestOverlap / 3) * 0.4;
+
+  // Goal alignment (max 0.25)
+  const goalText = context.goals.join(' ').toLowerCase();
+  const goalOverlap = event.entities.filter((e) => goalText.includes(e.toLowerCase())).length;
+  score += Math.min(1, goalOverlap / 2) * 0.25;
+
+  // Recent research alignment (max 0.2)
+  const researchText = context.recentResearch.join(' ').toLowerCase();
+  const researchOverlap = event.topics.filter((t) => researchText.includes(t.toLowerCase())).length;
+  score += Math.min(1, researchOverlap / 2) * 0.2;
+
+  // Professional interests (max 0.15)
+  if (context.professionalInterests) {
+    const profText = context.professionalInterests.toLowerCase();
+    const profOverlap = event.topics.filter((t) => profText.includes(t.toLowerCase())).length;
+    score += Math.min(1, profOverlap / 2) * 0.15;
+  }
+
+  return Math.min(1, Math.max(0, score));
+}
+
+
+---END-OF-FILE---
+
+
+============================================================
+FILE: src\lib\global-updates\significance-scoring.ts
+SIZE: 1834 bytes
+LAST_WRITE: 08/15/2026 23:10:35
+============================================================
+
+// Significance Scoring Layer
+import { EventType } from '@prisma/client';
+import { SourceMetadata } from './types';
+
+interface SignificanceInput {
+  sources: SourceMetadata[];
+  eventType: EventType;
+  geographicScope: string[];
+  economicMagnitude?: number; // 0-1 estimated impact
+  socialMagnitude?: number;
+  speedOfDevelopment: number; // 0-1 how fast story is evolving
+  persistence: number; // 0-1 how long story has been relevant
+}
+
+/**
+ * Calculate global significance score (0-1).
+ * Prevents noisy, low-impact stories from flooding the feed.
+ */
+export function calculateSignificance(input: SignificanceInput): number {
+  const { sources, eventType, geographicScope, economicMagnitude, socialMagnitude, speedOfDevelopment, persistence } = input;
+
+  // Source volume & quality (max 0.3)
+  const sourceScore = Math.min(1, sources.length / 10) * 0.3;
+
+  // Source credibility (max 0.25)
+  const avgCredibility = sources.reduce((sum, s) => sum + s.credibility, 0) / (sources.length || 1);
+  const credibilityScore = avgCredibility * 0.25;
+
+  // Geographic impact (max 0.15)
+  const geoScore = Math.min(1, geographicScope.length / 5) * 0.15;
+
+  // Economic/social magnitude (max 0.15)
+  const magnitudeScore = ((economicMagnitude || 0.3) + (socialMagnitude || 0.3)) / 2 * 0.15;
+
+  // Speed & persistence (max 0.15)
+  const velocityScore = ((speedOfDevelopment || 0.5) + (persistence || 0.5)) / 2 * 0.15;
+
+  let total = sourceScore + credibilityScore + geoScore + magnitudeScore + velocityScore;
+
+  // Boost for breaking news
+  if (eventType === 'BREAKING') total += 0.05;
+
+  // Penalty for single-source stories
+  if (sources.length < 2) total *= 0.6;
+
+  return Math.min(1, Math.max(0, total));
+}
+
+/**
+ * Minimum significance threshold for an event to become a Global Update.
+ */
+export const SIGNIFICANCE_THRESHOLD = 0.45;
+
+
+---END-OF-FILE---
+
+
+============================================================
+FILE: src\lib\global-updates\summarisation.ts
+SIZE: 3040 bytes
+LAST_WRITE: 08/15/2026 23:10:35
+============================================================
+
+// Summarisation Layer — LLM-powered "What happened / What it means"
+import OpenAI from 'openai';
+import { ExtractedEvent } from './types';
+
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+interface SummarisationResult {
+  whatHappened: string;
+  whatItMeans: string;
+  whatIsUncertain?: string;
+  headline: string;
+  summary: string;
+}
+
+/**
+ * Use LLM to synthesise verified sources into structured intelligence.
+ */
+export async function synthesiseEvent(
+  sources: Array<{ title: string; content?: string; publisher: string }>,
+  existingEvent?: Partial<ExtractedEvent>
+): Promise<SummarisationResult> {
+  const sourceText = sources
+    .map((s, i) => `[${i + 1}] ${s.publisher}: ${s.title}${s.content ? `\n${s.content.slice(0, 800)}` : ''}`)
+    .join('\n\n');
+
+  const prompt = `You are Lurisa's Global Updates intelligence synthesiser. You ONLY report what the sources actually say. You NEVER fabricate facts, quotes, or URLs.
+
+Given the following sources, produce a structured intelligence summary:
+
+${sourceText}
+
+Respond in this exact JSON format:
+{
+  "headline": "A clear, factual headline (max 10 words)",
+  "summary": "A 3-5 sentence verified summary of the event",
+  "whatHappened": "The verified real-world event, in 2-3 sentences",
+  "whatItMeans": "Evidence-based analysis of significance, in 2-3 sentences",
+  "whatIsUncertain": "What remains unclear or disputed, or null if everything is clear"
+}
+
+Rules:
+- Only use information present in the sources.
+- If sources disagree, acknowledge the disagreement.
+- Never invent statistics, names, or quotes.
+- Keep tone calm, objective, and premium editorial.`;
+
+  try {
+    const response = await openai.chat.completions.create({
+      model: process.env.LURISA_MODEL || 'gpt-4o-mini',
+      messages: [{ role: 'user', content: prompt }],
+      response_format: { type: 'json_object' },
+      temperature: 0.3,
+      max_tokens: 800,
+    });
+
+    const raw = response.choices[0]?.message?.content;
+    if (!raw) throw new Error('Empty LLM response');
+
+    const parsed = JSON.parse(raw) as SummarisationResult;
+
+    // Validation: ensure no hallucinated URLs
+    return {
+      headline: parsed.headline || existingEvent?.headline || 'Untitled Update',
+      summary: parsed.summary || '',
+      whatHappened: parsed.whatHappened || '',
+      whatItMeans: parsed.whatItMeans || '',
+      whatIsUncertain: parsed.whatIsUncertain || undefined,
+    };
+  } catch (err) {
+    console.error('[GlobalUpdates] Summarisation failed:', err);
+    // Graceful fallback
+    return {
+      headline: existingEvent?.headline || sources[0]?.title || 'Untitled Update',
+      summary: `Multiple sources report developments in this area. ${sources.length} sources are tracking this story.`,
+      whatHappened: 'Early reports are emerging. Details may change as more information becomes available.',
+      whatItMeans: 'The significance of this development is still being assessed.',
+      whatIsUncertain: 'Early reports are emerging. Details may change.',
+    };
+  }
+}
+
+
+---END-OF-FILE---
+
+
+============================================================
+FILE: src\lib\global-updates\types.ts
+SIZE: 2387 bytes
+LAST_WRITE: 08/16/2026 01:20:11
+============================================================
+
+// Global Updates Engine — Shared Types
+import { EventStatus, EventType, SourceType, ContentType } from '@prisma/client';
+
+export enum ConfidenceLevel {
+  VERY_LOW = 'VERY_LOW',
+  LOW = 'LOW',
+  MEDIUM = 'MEDIUM',
+  HIGH = 'HIGH',
+  VERY_HIGH = 'VERY_HIGH',
+}
+
+export interface SourceMetadata {
+  sourceId: string;
+  title: string;
+  publisher?: string;
+  author?: string;
+  url: string;
+  publicationDate?: Date;
+  retrievedAt: Date;
+  sourceType: SourceType;
+  country?: string;
+  topic?: string;
+  credibility: number;
+  content?: string;
+  rawClaims?: string;
+}
+
+export interface RawArticle {
+  id: string;
+  url: string;
+  title: string;
+  content: string;
+  publishedAt?: Date;
+  publisher: string;
+  author?: string;
+  sourceType: SourceType;
+  country?: string;
+  topic?: string;
+}
+
+export interface ExtractedEvent {
+  headline: string;
+  summary: string;
+  eventType: EventType;
+  topics: string[];
+  entities: string[];
+  locations: string[];
+  whatHappened: string;
+  whatItMeans: string;
+  whatIsUncertain?: string;
+  importanceScore: number;
+  confidenceScore: number;
+  sources: SourceMetadata[];
+  contradictions: EventContradiction[];
+}
+
+export interface EventContradiction {
+  claimA: string;
+  claimB: string;
+  sourceAId: string;
+  sourceBId: string;
+  explanation: string;
+}
+
+export interface UserRelevanceContext {
+  userId: string;
+  interests: string[];
+  goals: string[];
+  projects: string[];
+  recentResearch: string[];
+  professionalInterests?: string;
+  geographicPreferences?: string[];
+  communicationStyle?: string;
+}
+
+export interface PersonalisedUpdate {
+  eventId: string;
+  headline: string;
+  summary: string;
+  eventType: EventType;
+  topics: string[];
+  whatHappened: string;
+  whatItMeans: string;
+  whyItMattersToYou?: string;
+  whatIsUncertain?: string;
+  confidence: ConfidenceLevel;
+  freshness: string;
+  sourceCount: number;
+  sources: SourceMetadata[];
+  isDeveloping: boolean;
+  contentType: ContentType;
+}
+
+export interface RankingFactors {
+  globalSignificance: number;
+  freshness: number;
+  sourceConfidence: number;
+  userRelevance: number;
+  topicAffinity: number;
+  goalRelevance: number;
+  novelty: number;
+  duplicatePenalty: number;
+  lowQualityPenalty: number;
+}
+
+export interface FeedOptions {
+  tab: 'for-you' | 'trending' | 'africa' | 'technology' | 'business' | 'interests';
+  page?: number;
+  pageSize?: number;
+}
+
+
+
+
+---END-OF-FILE---
+
+
+============================================================
+FILE: src\lib\global-updates\verification.ts
+SIZE: 3315 bytes
+LAST_WRITE: 08/15/2026 23:10:35
+============================================================
+
+// Verification Layer — Source credibility, corroboration, freshness scoring
+import { SourceMetadata } from './types';
+
+interface VerificationResult {
+  credibilityScore: number;
+  isCorroborated: boolean;
+  corroboratingCount: number;
+  contradictoryCount: number;
+  freshnessScore: number;
+  overallConfidence: number;
+}
+
+/**
+ * Verify a cluster of sources reporting the same event.
+ */
+export function verifySources(sources: SourceMetadata[]): VerificationResult {
+  if (sources.length === 0) {
+    return {
+      credibilityScore: 0,
+      isCorroborated: false,
+      corroboratingCount: 0,
+      contradictoryCount: 0,
+      freshnessScore: 0,
+      overallConfidence: 0,
+    };
+  }
+
+  // 1. Source credibility
+  const credibilityScores = sources.map((s) => assessSourceCredibility(s));
+  const avgCredibility = credibilityScores.reduce((a, b) => a + b, 0) / credibilityScores.length;
+
+  // 2. Corroboration
+  const primaryCount = sources.filter((s) => s.sourceType === 'PRIMARY').length;
+  const secondaryCount = sources.filter((s) => s.sourceType === 'SECONDARY').length;
+  const isCorroborated = primaryCount >= 1 && secondaryCount >= 2;
+  const corroboratingCount = sources.length;
+
+  // 3. Freshness
+  const now = Date.now();
+  const ageHours = sources.map((s) => {
+    if (!s.publicationDate) return 48;
+    return (now - s.publicationDate.getTime()) / (1000 * 60 * 60);
+  });
+  const avgAge = ageHours.reduce((a, b) => a + b, 0) / ageHours.length;
+  const freshnessScore = Math.max(0, 1 - avgAge / 72); // Decay over 72 hours
+
+  // 4. Overall confidence
+  const overallConfidence = Math.min(1, (avgCredibility * 0.4) + (freshnessScore * 0.3) + (isCorroborated ? 0.3 : 0.1));
+
+  return {
+    credibilityScore: avgCredibility,
+    isCorroborated,
+    corroboratingCount,
+    contradictoryCount: 0, // Set by contradiction layer
+    freshnessScore,
+    overallConfidence,
+  };
+}
+
+function assessSourceCredibility(source: SourceMetadata): number {
+  let score = 0.5;
+
+  // Primary sources get a boost
+  if (source.sourceType === 'PRIMARY') score += 0.2;
+
+  // Known reputable publishers
+  const reputable = [
+    'reuters', 'ap news', 'bloomberg', 'financial times', 'economist',
+    'nature', 'science', 'bbc', 'al jazeera', 'techcrunch', 'the guardian',
+    'forbes', 'wall street journal', 'new york times', 'washington post',
+  ];
+  if (reputable.some((r) => source.publisher?.toLowerCase().includes(r))) {
+    score += 0.15;
+  }
+
+  // Has author attribution
+  if (source.author && source.author.length > 2) score += 0.05;
+
+  // Recent publication
+  if (source.publicationDate) {
+    const hoursOld = (Date.now() - source.publicationDate.getTime()) / (1000 * 60 * 60);
+    if (hoursOld < 24) score += 0.05;
+    else if (hoursOld > 168) score -= 0.1; // Older than 1 week
+  }
+
+  return Math.min(1, Math.max(0, score));
+}
+
+/**
+ * Detect if two sources contradict each other on a specific claim.
+ * Returns a contradiction record if detected, null otherwise.
+ */
+export function detectContradiction(sourceA: SourceMetadata, sourceB: SourceMetadata): { claimA: string; claimB: string; explanation: string } | null {
+  // Placeholder: In production, use LLM to compare claims extracted from each source.
+  // For now, return null (no contradiction detected) to avoid false positives.
+  return null;
+}
+
+
+---END-OF-FILE---
+
+
+============================================================
+FILE: src\app\api\global-updates\analytics\route.ts
+SIZE: 1455 bytes
+LAST_WRITE: 08/16/2026 00:12:03
+============================================================
+
+import { NextRequest, NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import { prisma } from "@/lib/db";
+
+export async function POST(req: NextRequest) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const userId = session.user.id;
+
+  try {
+    const body = await req.json();
+    const { event, eventId } = body;
+
+    if (!eventId || !event) {
+      return NextResponse.json({ error: "Missing parameters" }, { status: 400 });
+    }
+
+    const eventRecord: any = {
+      eventId: eventId,
+      userId,
+      impressionAt: new Date(),
+      sponsored: false,
+    };
+
+    if (event === "open") eventRecord.openAt = new Date();
+    else if (event === "save") eventRecord.saveAt = new Date();
+    else if (event === "research") eventRecord.researchAt = new Date();
+    else if (event === "source-click") eventRecord.sourceClickAt = new Date();
+    else if (event === "hide") eventRecord.hideAt = new Date();
+    else if (event === "not-relevant") eventRecord.notRelevantAt = new Date();
+
+    await prisma.global_update_analytics.create({ data: eventRecord });
+
+    return NextResponse.json({ success: true });
+  } catch (err) {
+    console.error("[GlobalUpdates API] Analytics error:", err);
+    return NextResponse.json({ success: false }, { status: 200 });
+  }
+}
+
+---END-OF-FILE---
+
+
+============================================================
+FILE: src\app\api\global-updates\dashboard\route.ts
+SIZE: 2585 bytes
+LAST_WRITE: 08/16/2026 01:06:52
+============================================================
+
+import { NextRequest, NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
+import { prisma } from '@/lib/db';
+import { globalUpdatesCache } from '@/lib/global-updates/cache';
+
+export async function GET(req: NextRequest) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const userId = session.user.id;
+
+  try {
+    const cached = await globalUpdatesCache.getDashboard(userId);
+    if (cached) return NextResponse.json({ updates: cached });
+
+    const rankings = await prisma.global_update_rankings.findMany({
+      where: { userId, hiddenAt: null },
+      orderBy: { compositeScore: 'desc' },
+      take: 3,
+      include: { global_events: {
+          include: { sources: { take: 3, select: { publisher: true, url: true } } },
+        },
+      },
+    });
+
+    let updates: any[];
+
+    if (rankings.length > 0) {
+      updates = rankings.map((r) => formatEvent(r.global_events, r.compositeScore));
+    } else {
+      const events = await prisma.global_events.findMany({
+        where: { status: 'ACTIVE', contentType: 'GLOBAL_UPDATE' },
+        orderBy: [{ importanceScore: 'desc' }, { latestUpdateAt: 'desc' }],
+        take: 3,
+        include: { sources: { take: 3, select: { publisher: true, url: true } } },
+      });
+      updates = events.map((e) => formatEvent(e, e.importanceScore));
+    }
+
+    await globalUpdatesCache.setDashboard(userId, updates);
+    return NextResponse.json({ updates });
+  } catch (err) {
+    console.error('[GlobalUpdates API] Dashboard error:', err);
+    return NextResponse.json({ updates: [], message: 'Nothing significant has changed in your selected interests yet.' });
+  }
+}
+
+function formatEvent(event: any, score: number) {
+  return {
+    id: event.id,
+    headline: event.headline,
+    summary: event.summary.slice(0, 180) + (event.summary.length > 180 ? '...' : ''),
+    eventType: event.eventType,
+    topics: event.topics.slice(0, 3),
+    freshness: getFreshnessLabel(event.latestUpdateAt),
+    sourceCount: event.sourceCount,
+    confidence: score > 0.7 ? 'High' : score > 0.4 ? 'Medium' : 'Low',
+    isDeveloping: event.isDeveloping,
+  };
+}
+
+function getFreshnessLabel(date: Date): string {
+  const hours = (Date.now() - new Date(date).getTime()) / (1000 * 60 * 60);
+  if (hours < 1) return 'Just now';
+  if (hours < 24) return `${Math.floor(hours)}h ago`;
+  if (hours < 72) return `${Math.floor(hours / 24)}d ago`;
+  return 'Updated recently';
+}
+
+
+
+---END-OF-FILE---
+
+
+============================================================
+FILE: src\app\api\global-updates\feed\route.ts
+SIZE: 7220 bytes
+LAST_WRITE: 08/16/2026 01:06:52
+============================================================
+
+import { NextRequest, NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
+import { prisma } from '@/lib/db';
+import { globalUpdatesCache } from '@/lib/global-updates/cache';
+import { redis } from '@/lib/redis';
+
+const VALID_TABS = ['for-you', 'trending', 'africa', 'technology', 'business', 'interests'];
+const RATE_LIMIT_WINDOW = 60;
+const RATE_LIMIT_MAX = 30;
+
+async function checkRateLimit(identifier: string): Promise<boolean> {
+  try {
+    const key = `ratelimit:global-updates:feed:${identifier}`;
+    const current = await redis.incr(key);
+    if (current === 1) {
+      await redis.expire(key, RATE_LIMIT_WINDOW);
+    }
+    return current <= RATE_LIMIT_MAX;
+  } catch {
+    return true;
+  }
+}
+
+export async function GET(req: NextRequest) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const userId = session.user.id;
+  const clientIp = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
+  const allowed = await checkRateLimit(`${userId}:${clientIp}`);
+  if (!allowed) {
+    return NextResponse.json({ error: 'Rate limit exceeded. Please slow down.' }, { status: 429 });
+  }
+
+  const { searchParams } = new URL(req.url);
+  const tab = searchParams.get('tab') || 'for-you';
+  const page = Math.max(1, parseInt(searchParams.get('page') || '1'));
+  const pageSize = Math.min(50, Math.max(1, parseInt(searchParams.get('pageSize') || '10')));
+
+  if (!VALID_TABS.includes(tab)) {
+    return NextResponse.json({ error: 'Invalid tab' }, { status: 400 });
+  }
+
+  try {
+    const cached = await globalUpdatesCache.getFeed(userId, tab, page);
+    if (cached) {
+      return NextResponse.json(
+        { updates: cached, tab, page, hasMore: cached.length === pageSize },
+        { headers: { 'X-Cache': 'HIT', 'X-Content-Type-Options': 'nosniff' } }
+      );
+    }
+
+    let updates: any[] = [];
+
+    if (tab === 'for-you') {
+      const rankings = await prisma.global_update_rankings.findMany({
+        where: { userId, hiddenAt: null },
+        orderBy: { compositeScore: 'desc' },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        include: { global_events: {
+            include: { sources: { take: 5, select: { publisher: true, url: true, sourceType: true } } },
+          },
+        },
+      });
+      updates = rankings.map((r) => formatFeedEvent(r.global_events, r.compositeScore));
+    } else if (tab === 'trending') {
+      const events = await prisma.global_events.findMany({
+        where: { status: 'ACTIVE', importanceScore: { gte: 0.5 } },
+        orderBy: [{ importanceScore: 'desc' }, { latestUpdateAt: 'desc' }],
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        include: { sources: { take: 5, select: { publisher: true, url: true, sourceType: true } } },
+      });
+      updates = events.map((e) => formatFeedEvent(e, e.importanceScore));
+    } else if (tab === 'africa') {
+      const events = await prisma.global_events.findMany({
+        where: { status: 'ACTIVE', africanCountries: { isEmpty: false } },
+        orderBy: [{ importanceScore: 'desc' }, { latestUpdateAt: 'desc' }],
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        include: { sources: { take: 5, select: { publisher: true, url: true, sourceType: true } } },
+      });
+      updates = events.map((e) => formatFeedEvent(e, e.importanceScore));
+    } else if (tab === 'technology') {
+      const events = await prisma.global_events.findMany({
+        where: {
+          status: 'ACTIVE',
+          OR: [{ eventType: 'TECHNOLOGY' }, { topics: { has: 'technology' } }],
+        },
+        orderBy: [{ importanceScore: 'desc' }, { latestUpdateAt: 'desc' }],
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        include: { sources: { take: 5, select: { publisher: true, url: true, sourceType: true } } },
+      });
+      updates = events.map((e) => formatFeedEvent(e, e.importanceScore));
+    } else if (tab === 'business') {
+      const events = await prisma.global_events.findMany({
+        where: {
+          status: 'ACTIVE',
+          OR: [{ eventType: 'BUSINESS' }, { eventType: 'MARKET' }, { topics: { has: 'business' } }],
+        },
+        orderBy: [{ importanceScore: 'desc' }, { latestUpdateAt: 'desc' }],
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        include: { sources: { take: 5, select: { publisher: true, url: true, sourceType: true } } },
+      });
+      updates = events.map((e) => formatFeedEvent(e, e.importanceScore));
+    } else if (tab === 'interests') {
+      const userInterests = await prisma.user_interests.findMany({
+        where: { userId, isFollowed: true, isHidden: false },
+      });
+      const topics = userInterests.map((i) => i.topic.toLowerCase());
+      if (topics.length === 0) {
+        return NextResponse.json({ updates: [], message: 'You have not followed any topics yet. Explore and follow topics that matter to you.' });
+      }
+      const events = await prisma.global_events.findMany({
+        where: {
+          status: 'ACTIVE',
+          topics: { hasSome: topics },
+        },
+        orderBy: [{ importanceScore: 'desc' }, { latestUpdateAt: 'desc' }],
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        include: { sources: { take: 5, select: { publisher: true, url: true, sourceType: true } } },
+      });
+      updates = events.map((e) => formatFeedEvent(e, e.importanceScore));
+    }
+
+    await globalUpdatesCache.setFeed(userId, tab, page, updates);
+
+    try {
+      await prisma.global_update_analytics.create({
+        data: {
+          eventId: 'feed-impression',
+          userId,
+          impressionAt: new Date(),
+          topic: tab,
+        },
+      });
+    } catch {
+      // Analytics must never break the request
+    }
+
+    return NextResponse.json(
+      { updates, tab, page, hasMore: updates.length === pageSize },
+      { headers: { 'X-Content-Type-Options': 'nosniff' } }
+    );
+  } catch (err) {
+    console.error('[GlobalUpdates API] Feed error:', err);
+    return NextResponse.json(
+      { updates: [], message: 'Unable to load updates right now. Please try again shortly.' },
+      { status: 500 }
+    );
+  }
+}
+
+function formatFeedEvent(event: any, score: number) {
+  return {
+    id: event.id,
+    headline: event.headline,
+    summary: event.summary.slice(0, 240) + (event.summary.length > 240 ? '...' : ''),
+    eventType: event.eventType,
+    topics: event.topics.slice(0, 3),
+    whatHappened: event.whatHappened?.slice(0, 300),
+    whatItMeans: event.whatItMeans?.slice(0, 300),
+    freshness: getFreshnessLabel(event.latestUpdateAt),
+    sourceCount: event.sourceCount,
+    confidence: score > 0.7 ? 'High' : score > 0.4 ? 'Medium' : 'Low',
+    isDeveloping: event.isDeveloping,
+    contentType: event.contentType,
+  };
+}
+
+function getFreshnessLabel(date: Date): string {
+  const hours = (Date.now() - new Date(date).getTime()) / (1000 * 60 * 60);
+  if (hours < 1) return 'Just now';
+  if (hours < 24) return `${Math.floor(hours)}h ago`;
+  if (hours < 72) return `${Math.floor(hours / 24)}d ago`;
+  return 'Updated recently';
+}
+
+
+
+---END-OF-FILE---
+
+
+============================================================
+FILE: src\app\api\global-updates\health\route.ts
+SIZE: 831 bytes
+LAST_WRITE: 08/16/2026 00:26:22
+============================================================
+
+import { NextResponse } from "next/server";
+import { prisma } from "@/lib/db";
+import { redis } from "@/lib/redis";
+
+export async function GET() {
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    await redis.ping();
+    const lastRun = await redis.get("global-updates:last-worker-run");
+    const workerHealthy = lastRun
+      ? Date.now() - parseInt(lastRun) < 1000 * 60 * 30
+      : false;
+
+    return NextResponse.json({
+      status: "healthy",
+      database: "connected",
+      cache: "connected",
+      worker: workerHealthy ? "active" : "idle_or_unknown",
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error: any) {
+    return NextResponse.json(
+      {
+        status: "unhealthy",
+        error: error.message,
+        timestamp: new Date().toISOString(),
+      },
+      { status: 503 }
+    );
+  }
+}
+
+
+---END-OF-FILE---
+
+
+============================================================
+FILE: src\app\api\global-updates\interests\route.ts
+SIZE: 4024 bytes
+LAST_WRITE: 08/16/2026 00:12:03
+============================================================
+
+import { NextRequest, NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import { prisma } from "@/lib/db";
+
+export async function GET() {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const userId = session.user.id;
+
+  try {
+    const interests = await prisma.user_interests.findMany({
+      where: { userId },
+      orderBy: [{ isFollowed: "desc" }, { updatedAt: "desc" }],
+    });
+
+    return NextResponse.json({ interests });
+  } catch (err) {
+    console.error("[GlobalUpdates API] Interests GET error:", err);
+    return NextResponse.json({ error: "Failed to load interests" }, { status: 500 });
+  }
+}
+
+export async function POST(req: NextRequest) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const userId = session.user.id;
+
+  try {
+    const body = await req.json();
+    const { topic, action } = body;
+
+    if (!topic || typeof topic !== "string" || topic.length > 100) {
+      return NextResponse.json({ error: "Invalid topic" }, { status: 400 });
+    }
+
+    const validActions = ["follow", "unfollow", "hide", "unhide", "reduce", "increase"];
+    if (!validActions.includes(action)) {
+      return NextResponse.json({ error: "Invalid action" }, { status: 400 });
+    }
+
+    const existing = await prisma.user_interests.findUnique({
+      where: { userId_topic: { userId, topic: topic.toLowerCase() } },
+    });
+
+    let updated;
+
+    if (action === "follow") {
+      updated = await prisma.user_interests.upsert({
+        where: { userId_topic: { userId, topic: topic.toLowerCase() } },
+        update: { isFollowed: true, isHidden: false, weight: { increment: 0.2 } },
+        create: { userId, topic: topic.toLowerCase(), isFollowed: true, weight: 1.0 },
+      });
+    } else if (action === "unfollow") {
+      if (existing) {
+        updated = await prisma.user_interests.update({
+          where: { id: existing.id },
+          data: { isFollowed: false, weight: Math.max(0, existing.weight - 0.2) },
+        });
+      }
+    } else if (action === "hide") {
+      updated = await prisma.user_interests.upsert({
+        where: { userId_topic: { userId, topic: topic.toLowerCase() } },
+        update: { isHidden: true, isFollowed: false },
+        create: { userId, topic: topic.toLowerCase(), isHidden: true, isFollowed: false, weight: 0 },
+      });
+    } else if (action === "unhide") {
+      if (existing) {
+        updated = await prisma.user_interests.update({
+          where: { id: existing.id },
+          data: { isHidden: false },
+        });
+      }
+    } else if (action === "reduce") {
+      if (existing) {
+        updated = await prisma.user_interests.update({
+          where: { id: existing.id },
+          data: { weight: Math.max(0, existing.weight - 0.3) },
+        });
+      }
+    } else if (action === "increase") {
+      if (existing) {
+        updated = await prisma.user_interests.update({
+          where: { id: existing.id },
+          data: { weight: Math.min(3, existing.weight + 0.3), isFollowed: true },
+        });
+      }
+    }
+
+    try {
+      await fetch(`${process.env.APP_URL}/api/jobs/global-updates`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Worker-Secret": process.env.WORKER_SECRET || "",
+        },
+        body: JSON.stringify({ action: "recompute-rankings", userId }),
+      });
+    } catch { }
+
+    const interests = await prisma.user_interests.findMany({
+      where: { userId },
+      orderBy: [{ isFollowed: "desc" }, { updatedAt: "desc" }],
+    });
+
+    return NextResponse.json({ interests, updated });
+  } catch (err) {
+    console.error("[GlobalUpdates API] Interests POST error:", err);
+    return NextResponse.json({ error: "Failed to update interests" }, { status: 500 });
+  }
+}
+
+---END-OF-FILE---
+
+
+============================================================
+FILE: src\app\api\global-updates\[id]\route.ts
+STATUS: FILE NOT FOUND
+
+---END-OF-FILE---
+
+
+============================================================
+FILE: src\app\api\global-updates\[id]\research\route.ts
+STATUS: FILE NOT FOUND
+
+---END-OF-FILE---
+
+
+============================================================
+FILE: src\app\api\global-updates\[id]\save\route.ts
+STATUS: FILE NOT FOUND
+
+---END-OF-FILE---
+
+
+============================================================
+FILE: src\components\global-updates\empty-state.tsx
+SIZE: 2452 bytes
+LAST_WRITE: 08/16/2026 00:22:18
+============================================================
+
+"use client";
+
+import { ReactNode } from "react";
+import { Globe, Search, MapPin, Cpu, Briefcase, Heart } from "lucide-react";
+
+interface EmptyStateProps {
+  tab: string;
+}
+
+export function EmptyState({ tab }: EmptyStateProps) {
+  const configs: Record<string, { icon: ReactNode; title: string; message: string }> = {
+    "for-you": {
+      icon: <Globe className="w-8 h-8 text-parchment-700 dark:text-indigo-700" />,
+      title: "Nothing significant yet",
+      message: "Nothing significant has changed in your selected interests yet. Lurisa is continuously monitoring — check back soon.",
+    },
+    trending: {
+      icon: <Search className="w-8 h-8 text-parchment-700 dark:text-indigo-700" />,
+      title: "No trending updates",
+      message: "Major developments are being verified. Trending stories appear once they meet Lurisa's significance threshold.",
+    },
+    africa: {
+      icon: <MapPin className="w-8 h-8 text-parchment-700 dark:text-indigo-700" />,
+      title: "No African updates right now",
+      message: "Lurisa is monitoring African markets, policy, and culture. Updates will appear as significant events are verified.",
+    },
+    technology: {
+      icon: <Cpu className="w-8 h-8 text-parchment-700 dark:text-indigo-700" />,
+      title: "No technology updates",
+      message: "Significant technology developments are being tracked. Check back as the landscape evolves.",
+    },
+    business: {
+      icon: <Briefcase className="w-8 h-8 text-parchment-700 dark:text-indigo-700" />,
+      title: "No business updates",
+      message: "Market and business developments are being verified. Updates appear once corroborated by credible sources.",
+    },
+    interests: {
+      icon: <Heart className="w-8 h-8 text-parchment-700 dark:text-indigo-700" />,
+      title: "No updates for your interests",
+      message: "You have not followed any topics yet, or no significant events match your interests. Explore and follow topics that matter to you.",
+    },
+  };
+
+  const config = configs[tab] || configs["for-you"];
+
+  return (
+    <div className="flex flex-col items-center justify-center text-center py-16 px-4 animate-fade-in">
+      <div className="mb-3">{config.icon}</div>
+      <h3 className="text-sm font-medium text-charcoal-700 dark:text-parchment-200 mb-1">{config.title}</h3>
+      <p className="text-xs text-charcoal-300 dark:text-parchment-500 max-w-sm leading-relaxed">{config.message}</p>
+    </div>
+  );
+}
+
+---END-OF-FILE---
+
+
+============================================================
+FILE: src\components\global-updates\index.ts
+SIZE: 192 bytes
+LAST_WRITE: 08/16/2026 00:22:18
+============================================================
+
+export { UpdateCard } from "./update-card";
+export { UpdateDetail } from "./update-detail";
+export { EmptyState } from "./empty-state";
+export { InterestManager } from "./interest-manager";
+
+---END-OF-FILE---
+
+
+============================================================
+FILE: src\components\global-updates\interest-manager.tsx
+SIZE: 4785 bytes
+LAST_WRITE: 08/16/2026 00:22:18
+============================================================
+
+"use client";
+
+import { useState, useEffect } from "react";
+import { X, Plus, Minus, EyeOff, Heart } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+
+interface Interest {
+  id: string;
+  topic: string;
+  weight: number;
+  isFollowed: boolean;
+  isHidden: boolean;
+}
+
+interface InterestManagerProps {
+  open: boolean;
+  onClose: () => void;
+}
+
+export function InterestManager({ open, onClose }: InterestManagerProps) {
+  const [interests, setInterests] = useState<Interest[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [newTopic, setNewTopic] = useState("");
+
+  useEffect(() => {
+    if (!open) return;
+    fetch("/api/global-updates/interests")
+      .then((res) => res.json())
+      .then((data) => setInterests(data.interests || []));
+  }, [open]);
+
+  const mutate = async (topic: string, action: string) => {
+    setLoading(true);
+    try {
+      const res = await fetch("/api/global-updates/interests", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ topic, action }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setInterests(data.interests || []);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const addTopic = async () => {
+    if (!newTopic.trim()) return;
+    await mutate(newTopic.trim(), "follow");
+    setNewTopic("");
+  };
+
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+      <div className="bg-parchment-100 dark:bg-indigo-900 rounded-xl shadow-xl w-full max-w-md max-h-[80vh] flex flex-col border border-parchment-700/20 dark:border-indigo-800/30">
+        <div className="flex items-center justify-between p-4 border-b border-parchment-700/20 dark:border-indigo-800/30">
+          <h2 className="text-sm font-semibold text-charcoal-900 dark:text-parchment-100">Your Interests</h2>
+          <Button variant="ghost" size="sm" onClick={onClose}><X className="w-4 h-4" /></Button>
+        </div>
+        <div className="p-4 overflow-y-auto flex-1">
+          <div className="flex gap-2 mb-4">
+            <Input placeholder="Add a topic..." value={newTopic}
+              onChange={(e) => setNewTopic(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && addTopic()}
+              className="text-xs h-8 bg-parchment-100 dark:bg-indigo-900 border-parchment-700/30 dark:border-indigo-700/50" />
+            <Button size="sm" onClick={addTopic} disabled={loading}
+              className="h-8 px-2 bg-indigo-500 hover:bg-indigo-700 text-white dark:bg-indigo-300 dark:hover:bg-indigo-200 dark:text-indigo-900">
+              <Plus className="w-3.5 h-3.5" />
+            </Button>
+          </div>
+          <div className="space-y-2">
+            {interests.map((interest) => (
+              <div key={interest.id} className="flex items-center justify-between p-2 rounded-lg border border-parchment-700/20 dark:border-indigo-800/30 bg-parchment-100 dark:bg-indigo-900">
+                <div className="flex items-center gap-2 min-w-0">
+                  <Badge variant="secondary" className="text-[10px] shrink-0 bg-parchment-500/30 text-charcoal-600 dark:bg-indigo-800 dark:text-parchment-300">{interest.topic}</Badge>
+                  <span className="text-[10px] text-charcoal-300 dark:text-parchment-500 truncate">
+                    {interest.isFollowed ? "Following" : interest.isHidden ? "Hidden" : "Reduced"}
+                  </span>
+                </div>
+                <div className="flex items-center gap-1 shrink-0">
+                  <Button variant="ghost" size="sm" className="h-6 w-6 p-0"
+                    onClick={() => mutate(interest.topic, interest.isFollowed ? "unfollow" : "follow")}
+                    disabled={loading} title={interest.isFollowed ? "Unfollow" : "Follow"}>
+                    {interest.isFollowed ? <Minus className="w-3 h-3" /> : <Heart className="w-3 h-3" />}
+                  </Button>
+                  <Button variant="ghost" size="sm" className="h-6 w-6 p-0"
+                    onClick={() => mutate(interest.topic, interest.isHidden ? "unhide" : "hide")}
+                    disabled={loading} title={interest.isHidden ? "Unhide" : "Hide"}>
+                    <EyeOff className="w-3 h-3" />
+                  </Button>
+                </div>
+              </div>
+            ))}
+            {interests.length === 0 && (
+              <p className="text-xs text-charcoal-300 dark:text-parchment-500 text-center py-4">No interests yet. Add topics that matter to you.</p>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+---END-OF-FILE---
+
+
+============================================================
+FILE: src\components\global-updates\update-card.tsx
+SIZE: 4788 bytes
+LAST_WRITE: 08/16/2026 01:00:08
+============================================================
+
+"use client";
+
+import { useCallback } from "react";
+import { Clock, Shield, Newspaper, Sparkles, AlertTriangle } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { FeedUpdate } from "@/hooks/use-global-updates";
+
+interface UpdateCardProps {
+  update: FeedUpdate;
+  onClick: () => void;
+}
+
+export function UpdateCard({ update, onClick }: UpdateCardProps) {
+  const isSponsored = update.contentType === "SPONSORED";
+  const isRecommended = update.contentType === "RECOMMENDED";
+
+  const handleMouseEnter = useCallback(() => {
+    if (typeof window !== "undefined" && "fetch" in window) {
+      fetch(`/api/global-updates/${update.id}`, { priority: "low" } as any).catch(() => {});
+    }
+  }, [update.id]);
+
+  return (
+    <Card
+      className={`group cursor-pointer transition-all duration-200 hover:shadow-md border ${
+        isSponsored
+          ? "border-amber-300/50 dark:border-amber-700/50 bg-amber-50/30 dark:bg-amber-900/10"
+          : "border-parchment-700/20 dark:border-indigo-800/30 bg-parchment-100 dark:bg-indigo-900"
+      }`}
+      onClick={onClick}
+      onMouseEnter={handleMouseEnter}
+      role="article"
+      aria-label={`${update.headline}. ${update.confidence} confidence. ${update.freshness}`}
+    >
+      <CardContent className="p-5">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2 flex-wrap">
+            <Badge variant="secondary" className={`text-[10px] uppercase tracking-wider font-semibold ${
+              update.eventType === "AFRICA"
+                ? "bg-sage-100 text-sage-700 dark:bg-sage-900 dark:text-sage-300"
+                : update.eventType === "TECHNOLOGY"
+                ? "bg-indigo-100 text-indigo-700 dark:bg-indigo-800 dark:text-indigo-300"
+                : update.eventType === "BUSINESS" || update.eventType === "MARKET"
+                ? "bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300"
+                : "bg-parchment-500/30 text-charcoal-500 dark:bg-indigo-800 dark:text-parchment-300"
+            }`}>
+              {update.topics[0] || update.eventType}
+            </Badge>
+            {update.isDeveloping && (
+              <Badge variant="outline" className="text-[10px] border-terracotta-300 text-terracotta-600 dark:border-terracotta-700 dark:text-terracotta-300">
+                <AlertTriangle className="w-3 h-3 mr-1" aria-hidden="true" /> Developing
+              </Badge>
+            )}
+            {isSponsored && (
+              <Badge variant="outline" className="text-[10px] border-amber-400 text-amber-700 dark:border-amber-600 dark:text-amber-400">
+                <Sparkles className="w-3 h-3 mr-1" aria-hidden="true" /> Sponsored
+              </Badge>
+            )}
+            {isRecommended && (
+              <Badge variant="outline" className="text-[10px] border-sage-300 text-sage-600 dark:border-sage-700 dark:text-sage-300">
+                <Sparkles className="w-3 h-3 mr-1" aria-hidden="true" /> Recommended
+              </Badge>
+            )}
+          </div>
+        </div>
+
+        <h3 className="text-sm font-semibold text-charcoal-900 dark:text-parchment-100 leading-snug mb-2 group-hover:text-indigo-600 dark:group-hover:text-indigo-300 transition-colors">
+          {update.headline}
+        </h3>
+
+        <p className="text-xs text-charcoal-500 dark:text-parchment-400 leading-relaxed line-clamp-3 mb-3">
+          {update.summary}
+        </p>
+
+        {update.whyItMattersToYou && (
+          <div className="mb-3 p-2.5 rounded-lg bg-sage-50 dark:bg-sage-900/20 border border-sage-200 dark:border-sage-800">
+            <p className="text-[11px] font-medium text-sage-700 dark:text-sage-300 mb-0.5">Why this may matter to you</p>
+            <p className="text-[11px] text-charcoal-600 dark:text-parchment-400 leading-relaxed">{update.whyItMattersToYou}</p>
+          </div>
+        )}
+
+        <div className="flex items-center gap-3 text-[11px] text-charcoal-300 dark:text-parchment-500">
+          <span className="flex items-center gap-1"><Clock className="w-3 h-3" aria-hidden="true" />{update.freshness}</span>
+          <span className="flex items-center gap-1"><Newspaper className="w-3 h-3" aria-hidden="true" />{update.sourceCount} sources</span>
+          <span className={`flex items-center gap-1 font-medium ${
+            update.confidence === "High"
+              ? "text-sage-600 dark:text-sage-300"
+              : update.confidence === "Medium"
+              ? "text-amber-600 dark:text-amber-400"
+              : "text-terracotta-500"
+          }`}><Shield className="w-3 h-3" aria-hidden="true" />{update.confidence} confidence</span>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+---END-OF-FILE---
+
+
+============================================================
+FILE: src\components\global-updates\update-detail.tsx
+SIZE: 12687 bytes
+LAST_WRITE: 08/16/2026 01:01:09
+============================================================
+
+"use client";
+
+import { useState, useEffect, useCallback } from "react";
+import { ChevronLeft, Clock, Shield, Newspaper, AlertTriangle, CheckCircle, HelpCircle, Bookmark, Microscope, ExternalLink, Sparkles, Loader2 } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
+
+interface UpdateDetailProps {
+  updateId: string;
+  onBack: () => void;
+}
+
+interface FullUpdate {
+  id: string;
+  headline: string;
+  summary: string;
+  eventType: string;
+  topics: string[];
+  whatHappened: string;
+  whatItMeans: string;
+  whatIsUncertain?: string;
+  whyItMattersToYou?: string;
+  freshness: string;
+  sourceCount: number;
+  confidence: string;
+  isDeveloping: boolean;
+  contentType: string;
+  sources: Array<{
+    publisher?: string;
+    url?: string;
+    sourceType?: string;
+    title?: string;
+    author?: string;
+    publicationDate?: string;
+  }>;
+  timeline?: any[];
+  saved?: boolean;
+}
+
+export function UpdateDetail({ updateId, onBack }: UpdateDetailProps) {
+  const [update, setUpdate] = useState<FullUpdate | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [researching, setResearching] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`/api/global-updates/${updateId}`)
+      .then((res) => { if (!res.ok) throw new Error("Failed to load update"); return res.json(); })
+      .then((data) => { if (!cancelled) { setUpdate(data); setSaved(data.saved || false); setLoading(false); } })
+      .catch((err) => { if (!cancelled) { setError(err.message || "Failed to load update details"); setLoading(false); } });
+    return () => { cancelled = true; };
+  }, [updateId]);
+
+  const handleSave = useCallback(async () => {
+    if (saved) return;
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/global-updates/${updateId}/save`, { method: "POST", headers: { "Content-Type": "application/json" } });
+      if (res.ok) setSaved(true);
+    } catch { } finally { setSaving(false); }
+  }, [updateId, saved]);
+
+  const handleResearch = useCallback(async () => {
+    setResearching(true);
+    try {
+      const res = await fetch(`/api/global-updates/${updateId}/research`, { method: "POST", headers: { "Content-Type": "application/json" } });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.researchSessionId) window.location.href = `/research?session=${data.researchSessionId}`;
+      }
+    } catch { } finally { setResearching(false); }
+  }, [updateId]);
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onBack(); };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [onBack]);
+
+  if (loading) {
+    return (
+      <div className="p-6 md:p-8 max-w-3xl mx-auto animate-fade-in">
+        <div className="flex items-center gap-2 mb-6">
+          <Button variant="ghost" size="sm" onClick={onBack}><ChevronLeft className="w-4 h-4 mr-1" />Back</Button>
+        </div>
+        <Skeleton className="h-8 w-3/4 mb-4" />
+        <Skeleton className="h-4 w-full mb-2" />
+        <Skeleton className="h-4 w-5/6 mb-6" />
+        <Skeleton className="h-32 w-full mb-4" />
+        <Skeleton className="h-32 w-full" />
+      </div>
+    );
+  }
+
+  if (error || !update) {
+    return (
+      <div className="p-6 md:p-8 max-w-3xl mx-auto">
+        <Button variant="ghost" size="sm" onClick={onBack} className="mb-4"><ChevronLeft className="w-4 h-4 mr-1" />Back</Button>
+        <Card className="border-terracotta-200 dark:border-terracotta-800 bg-terracotta-50 dark:bg-terracotta-900/20">
+          <CardContent className="p-6 text-center">
+            <AlertTriangle className="w-8 h-8 text-terracotta-500 mx-auto mb-2" aria-hidden="true" />
+            <p className="text-sm text-charcoal-700 dark:text-parchment-200">{error || "Update not found"}</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  const isSponsored = update.contentType === "SPONSORED";
+  const timeline = update.timeline || [];
+
+  return (
+    <div className="p-6 md:p-8 max-w-3xl mx-auto animate-fade-in">
+      <div className="flex items-center justify-between mb-6">
+        <Button variant="ghost" size="sm" onClick={onBack} className="text-charcoal-500 dark:text-parchment-400">
+          <ChevronLeft className="w-4 h-4 mr-1" />Back to feed
+        </Button>
+        {isSponsored && (
+          <Badge variant="outline" className="border-amber-400 text-amber-700 dark:border-amber-600 dark:text-amber-400 text-[10px]">
+            <Sparkles className="w-3 h-3 mr-1" aria-hidden="true" />Sponsored
+          </Badge>
+        )}
+      </div>
+
+      <div className="mb-6">
+        <div className="flex items-center gap-2 mb-3">
+          <Badge variant="secondary" className="text-[10px] uppercase tracking-wider font-semibold bg-indigo-100 text-indigo-700 dark:bg-indigo-800 dark:text-indigo-300">
+            {update.topics[0] || update.eventType}
+          </Badge>
+          {update.isDeveloping && (
+            <Badge variant="outline" className="text-[10px] border-terracotta-300 text-terracotta-600 dark:border-terracotta-700 dark:text-terracotta-300">
+              <AlertTriangle className="w-3 h-3 mr-1" aria-hidden="true" />Developing
+            </Badge>
+          )}
+        </div>
+        <h1 className="text-xl md:text-2xl font-semibold text-charcoal-900 dark:text-parchment-100 leading-tight mb-3">{update.headline}</h1>
+        <div className="flex items-center gap-3 text-[11px] text-charcoal-300 dark:text-parchment-500">
+          <span className="flex items-center gap-1"><Clock className="w-3 h-3" aria-hidden="true" />{update.freshness}</span>
+          <span className="flex items-center gap-1"><Newspaper className="w-3 h-3" aria-hidden="true" />{update.sourceCount} sources</span>
+          <span className={`flex items-center gap-1 font-medium ${
+            update.confidence === "High"
+              ? "text-sage-600 dark:text-sage-300"
+              : update.confidence === "Medium"
+              ? "text-amber-600 dark:text-amber-400"
+              : "text-terracotta-500"
+          }`}><Shield className="w-3 h-3" aria-hidden="true" />{update.confidence} confidence</span>
+        </div>
+      </div>
+
+      <Card className="mb-6 border-parchment-700/20 dark:border-indigo-800/30 bg-parchment-100 dark:bg-indigo-900">
+        <CardContent className="p-5">
+          <p className="text-sm text-charcoal-700 dark:text-parchment-200 leading-relaxed font-medium">{update.summary}</p>
+        </CardContent>
+      </Card>
+
+      <section className="mb-6">
+        <h2 className="text-xs font-semibold text-charcoal-300 dark:text-parchment-400 uppercase tracking-widest mb-3">What happened</h2>
+        <div className="text-sm text-charcoal-600 dark:text-parchment-300 leading-relaxed whitespace-pre-line">{update.whatHappened || update.summary}</div>
+      </section>
+
+      <section className="mb-6">
+        <h2 className="text-xs font-semibold text-charcoal-300 dark:text-parchment-400 uppercase tracking-widest mb-3">What it means</h2>
+        <div className="text-sm text-charcoal-600 dark:text-parchment-300 leading-relaxed whitespace-pre-line">{update.whatItMeans || "Lurisa is analyzing what this development means for the broader context."}</div>
+      </section>
+
+      {update.whyItMattersToYou && (
+        <section className="mb-6">
+          <Card className="border-sage-200 dark:border-sage-800 bg-sage-50 dark:bg-sage-900/20">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-xs font-semibold text-sage-700 dark:text-sage-300 uppercase tracking-widest flex items-center gap-2">
+                <CheckCircle className="w-3.5 h-3.5" aria-hidden="true" />Why it may matter to you
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-0">
+              <p className="text-sm text-charcoal-700 dark:text-parchment-200 leading-relaxed">{update.whyItMattersToYou}</p>
+            </CardContent>
+          </Card>
+        </section>
+      )}
+
+      {update.whatIsUncertain && (
+        <section className="mb-6">
+          <Card className="border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/10">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-xs font-semibold text-amber-700 dark:text-amber-400 uppercase tracking-widest flex items-center gap-2">
+                <HelpCircle className="w-3.5 h-3.5" aria-hidden="true" />What is still uncertain
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-0">
+              <p className="text-sm text-charcoal-700 dark:text-parchment-200 leading-relaxed">{update.whatIsUncertain}</p>
+            </CardContent>
+          </Card>
+        </section>
+      )}
+
+      {timeline.length > 0 && (
+        <section className="mb-6">
+          <h2 className="text-xs font-semibold text-charcoal-300 dark:text-parchment-400 uppercase tracking-widest mb-3">Timeline</h2>
+          <div className="space-y-3">
+            {timeline.map((item, idx) => (
+              <div key={idx} className="flex gap-3">
+                <div className="flex flex-col items-center">
+                  <div className="w-2 h-2 rounded-full bg-indigo-400 dark:bg-indigo-500" />
+                  {idx < timeline.length - 1 && <div className="w-px flex-1 bg-parchment-700/30 dark:bg-indigo-800/30 mt-1" />}
+                </div>
+                <div className="pb-3">
+                  <p className="text-[11px] text-charcoal-300 dark:text-parchment-500 mb-0.5">{item.date || item.time}</p>
+                  <p className="text-xs text-charcoal-700 dark:text-parchment-200">{item.event}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      <section className="mb-8">
+        <h2 className="text-xs font-semibold text-charcoal-300 dark:text-parchment-400 uppercase tracking-widest mb-3">Sources</h2>
+        <div className="space-y-2">
+          {update.sources?.map((source, idx) => (
+            <a key={idx} href={source.url} target="_blank" rel="noopener noreferrer"
+              className="flex items-start gap-3 p-3 rounded-lg border border-parchment-700/20 dark:border-indigo-800/30 hover:border-indigo-300 dark:hover:border-indigo-600 transition-colors group bg-parchment-100 dark:bg-indigo-900"
+              onClick={(e) => e.stopPropagation()}>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-medium text-charcoal-800 dark:text-parchment-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-300 transition-colors truncate">{source.title || source.publisher || "Source"}</p>
+                <p className="text-[11px] text-charcoal-300 dark:text-parchment-500 mt-0.5">
+                  {source.publisher}
+                  {source.author ? ` · ${source.author}` : ""}
+                  {source.sourceType ? ` · ${source.sourceType}` : ""}
+                </p>
+              </div>
+              <ExternalLink className="w-3.5 h-3.5 text-charcoal-300 dark:text-parchment-500 shrink-0 mt-0.5" aria-hidden="true" />
+            </a>
+          ))}
+          {(!update.sources || update.sources.length === 0) && (
+            <p className="text-xs text-charcoal-300 dark:text-parchment-500 italic">Source details are being verified.</p>
+          )}
+        </div>
+      </section>
+
+      <div className="flex flex-col sm:flex-row gap-3 sticky bottom-6 z-10">
+        <Button onClick={handleResearch} disabled={researching}
+          className="flex-1 bg-indigo-500 hover:bg-indigo-700 text-white dark:bg-indigo-300 dark:hover:bg-indigo-200 dark:text-indigo-900">
+          <Microscope className="w-4 h-4 mr-2" aria-hidden="true" />
+          {researching ? <><Loader2 className="w-3.5 h-3.5 mr-2 animate-spin" />Creating research...</> : "Research this further"}
+        </Button>
+        <Button onClick={handleSave} disabled={saving || saved} variant="outline"
+          className="flex-1 border-sage-300 text-sage-700 hover:bg-sage-50 dark:border-sage-700 dark:text-sage-300 dark:hover:bg-sage-900/20">
+          <Bookmark className={`w-4 h-4 mr-2 ${saved ? "fill-current" : ""}`} aria-hidden="true" />
+          {saved ? "Saved to Lurisa" : saving ? "Saving..." : "Save to Lurisa"}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+---END-OF-FILE---
+

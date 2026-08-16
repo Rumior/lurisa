@@ -1,0 +1,193 @@
+
+# LURISA GLOBAL UPDATES — AUTOMATED DEPLOYMENT SCRIPT
+# Run from: C:\Users\HP\Desktop\lurisa
+# This places all downloaded fix files into the correct project locations.
+
+$ErrorActionPreference = "Stop"
+$root = (Get-Location).Path
+$backupDir = "$root\_deploy-backups-$(Get-Date -Format 'yyyyMMdd-HHmmss')"
+New-Item -ItemType Directory -Path $backupDir -Force | Out-Null
+
+function Write-Step($text) {
+    Write-Host "`n>>> $text" -ForegroundColor Cyan
+}
+
+function Backup-File($path) {
+    if (Test-Path $path) {
+        $rel = $path.Replace("$root\", "")
+        $dest = "$backupDir\$rel"
+        $destDir = Split-Path $dest
+        if (!(Test-Path $destDir)) { New-Item -ItemType Directory -Path $destDir -Force | Out-Null }
+        Copy-Item $path $dest -Force
+        Write-Host "  [BACKUP] $rel" -ForegroundColor DarkGray
+    }
+}
+
+function Deploy-File($source, $dest) {
+    $destDir = Split-Path $dest
+    if (!(Test-Path $destDir)) {
+        New-Item -ItemType Directory -Path $destDir -Force | Out-Null
+        Write-Host "  [DIR] Created $destDir" -ForegroundColor DarkGray
+    }
+    Backup-File $dest
+    Copy-Item $source $dest -Force
+    Write-Host "  [DEPLOY] $($dest.Replace("$root\", ""))" -ForegroundColor Green
+}
+
+Write-Host "========================================" -ForegroundColor Cyan
+Write-Host "LURISA GLOBAL UPDATES DEPLOYMENT" -ForegroundColor Cyan
+Write-Host "========================================" -ForegroundColor Cyan
+Write-Host "Root: $root"
+Write-Host "Backup: $backupDir"
+
+# ============================================================================
+# PHASE 1: Create missing API route directories
+# ============================================================================
+Write-Step "PHASE 1: Creating missing API directories"
+
+$dirs = @(
+    "src\app\api\global-updates\[id]",
+    "src\app\api\global-updates\[id]\save",
+    "src\app\api\global-updates\[id]\research"
+)
+
+foreach ($d in $dirs) {
+    $full = "$root\$d"
+    if (!(Test-Path $full)) {
+        New-Item -ItemType Directory -Path $full -Force | Out-Null
+        Write-Host "  [DIR] $d" -ForegroundColor Green
+    } else {
+        Write-Host "  [OK] $d already exists" -ForegroundColor DarkGray
+    }
+}
+
+# ============================================================================
+# PHASE 2: Deploy missing API routes
+# ============================================================================
+Write-Step "PHASE 2: Deploying missing API routes"
+
+Deploy-File "$root\api-global-updates-[id]-route.ts"        "$root\src\app\api\global-updates\[id]\route.ts"
+Deploy-File "$root\api-global-updates-[id]-save-route.ts"   "$root\src\app\api\global-updates\[id]\save\route.ts"
+Deploy-File "$root\api-global-updates-[id]-research-route.ts" "$root\src\app\api\global-updates\[id]\research\route.ts"
+
+# ============================================================================
+# PHASE 3: Deploy new engine modules
+# ============================================================================
+Write-Step "PHASE 3: Deploying new engine modules"
+
+Deploy-File "$root\privacy-boundary.ts"   "$root\src\lib\global-updates\privacy-boundary.ts"
+Deploy-File "$root\africa-layer.ts"       "$root\src\lib\global-updates\africa-layer.ts"
+Deploy-File "$root\advertising.ts"        "$root\src\lib\global-updates\advertising.ts"
+Deploy-File "$root\citation.ts"           "$root\src\lib\global-updates\citation.ts"
+Deploy-File "$root\analytics.ts"          "$root\src\lib\global-updates\analytics.ts"
+
+# ============================================================================
+# PHASE 4: Replace improved files (BACKUPS CREATED)
+# ============================================================================
+Write-Step "PHASE 4: Replacing improved engine files (backups saved)"
+
+Deploy-File "$root\discovery-improved.ts"              "$root\src\lib\global-updates\discovery.ts"
+Deploy-File "$root\contradiction-detection-improved.ts" "$root\src\lib\global-updates\contradiction-detection.ts"
+Deploy-File "$root\worker-improved.ts"                 "$root\src\workers\global-updates-worker.ts"
+Deploy-File "$root\feed-route-improved.ts"             "$root\src\app\api\global-updates\feed\route.ts"
+
+# ============================================================================
+# PHASE 5: Update barrel export
+# ============================================================================
+Write-Step "PHASE 5: Updating barrel export (index.ts)"
+
+$barrel = "$root\src\lib\global-updates\index.ts"
+Backup-File $barrel
+
+$barrelContent = Get-Content $barrel -Raw
+$newExports = @"
+export * from './types';
+export * from './discovery';
+export * from './deduplication';
+export * from './verification';
+export * from './contradiction-detection';
+export * from './significance-scoring';
+export * from './relevance-engine';
+export * from './ranking-engine';
+export * from './summarisation';
+export * from './personalisation';
+export * from './editorial-safety';
+export * from './cache';
+export * from './privacy-boundary';
+export * from './africa-layer';
+export * from './advertising';
+export * from './citation';
+export * from './analytics';
+"@
+
+Set-Content -Path $barrel -Value $newExports -Encoding utf8 -NoNewline
+Write-Host "  [UPDATED] src\lib\global-updates\index.ts" -ForegroundColor Green
+
+# ============================================================================
+# PHASE 6: Verify file placement
+# ============================================================================
+Write-Step "PHASE 6: Verification"
+
+$checks = @(
+    "src\app\api\global-updates\[id]\route.ts",
+    "src\app\api\global-updates\[id]\save\route.ts",
+    "src\app\api\global-updates\[id]\research\route.ts",
+    "src\lib\global-updates\privacy-boundary.ts",
+    "src\lib\global-updates\africa-layer.ts",
+    "src\lib\global-updates\advertising.ts",
+    "src\lib\global-updates\citation.ts",
+    "src\lib\global-updates\analytics.ts",
+    "src\lib\global-updates\discovery.ts",
+    "src\lib\global-updates\contradiction-detection.ts",
+    "src\workers\global-updates-worker.ts",
+    "src\app\api\global-updates\feed\route.ts"
+)
+
+$allOk = $true
+foreach ($c in $checks) {
+    $full = "$root\$c"
+    if (Test-Path $full) {
+        $size = (Get-Item $full).Length
+        Write-Host "  [OK] $c ($size bytes)" -ForegroundColor Green
+    } else {
+        Write-Host "  [MISSING] $c" -ForegroundColor Red
+        $allOk = $false
+    }
+}
+
+# ============================================================================
+# FINAL: Manual steps reminder
+# ============================================================================
+Write-Host "`n========================================" -ForegroundColor Yellow
+Write-Host "MANUAL STEPS STILL REQUIRED" -ForegroundColor Yellow
+Write-Host "========================================" -ForegroundColor Yellow
+
+Write-Host "`n1. SCHEMA FIXES (CRITICAL — Do not skip)" -ForegroundColor White
+Write-Host "   Open: prisma\schema.prisma" -ForegroundColor Gray
+Write-Host "   Apply the 3 fixes from SCHEMA-FIXES.md:" -ForegroundColor Gray
+Write-Host "     a) Fix global_update_rankings relation (remove global_eventsId)" -ForegroundColor Gray
+Write-Host "     b) Make global_event_sources.eventId optional (String?)" -ForegroundColor Gray
+Write-Host "     c) Add @@index([status, latestUpdateAt]) to global_events" -ForegroundColor Gray
+
+Write-Host "`n2. RUN MIGRATION" -ForegroundColor White
+Write-Host "   npx prisma migrate dev --name fix_global_updates_relations" -ForegroundColor Cyan
+Write-Host "   npx prisma generate" -ForegroundColor Cyan
+
+Write-Host "`n3. OPTIONAL: Install RSS parser for African sources" -ForegroundColor White
+Write-Host "   npm install rss-parser" -ForegroundColor Cyan
+
+Write-Host "`n4. RESTART DEV SERVER" -ForegroundColor White
+Write-Host "   npm run dev" -ForegroundColor Cyan
+
+Write-Host "`n5. VERIFY" -ForegroundColor White
+Write-Host "   - Click an update card -> should open detail" -ForegroundColor Gray
+Write-Host "   - Click Save -> should persist" -ForegroundColor Gray
+Write-Host "   - Click Research -> should create session" -ForegroundColor Gray
+Write-Host "   - Check console -> no FK constraint errors" -ForegroundColor Gray
+
+if ($allOk) {
+    Write-Host "`n✅ All files deployed successfully. Backups saved to:" -ForegroundColor Green
+    Write-Host "   $backupDir" -ForegroundColor Green
+} else {
+    Write-Host "`n⚠️  Some files are missing. Check errors above." -ForegroundColor Red
+}

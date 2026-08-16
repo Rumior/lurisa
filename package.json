@@ -15,7 +15,8 @@
         "worker:start": "tsx src/workers/export-worker.ts",
         "worker:consolidation": "tsx src/workers/consolidation-worker.ts",
         "metrics:serve": "tsx src/metrics/server.ts",
-        "postinstall": "prisma generate"
+        "postinstall": "prisma generate",
+        "worker:global-updates": "tsx src/workers/global-updates-worker.ts"
     },
     "dependencies": {
         "@prisma/client": "^5.13.0",
@@ -43,6 +44,7 @@
         "qrcode": "^1.5.3",
         "react": "^18.3.0",
         "react-dom": "^18.3.0",
+        "rss-parser": "^3.13.0",
         "speakeasy": "^2.0.0",
         "tailwind-merge": "^2.3.0",
         "uuid": "^9.0.1",
@@ -68,4 +70,3 @@
         "@prisma/engines@5.22.0": true
     }
 }
-

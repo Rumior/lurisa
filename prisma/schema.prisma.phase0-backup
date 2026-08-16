@@ -330,8 +330,6 @@ model users {
   user_personal_models  user_personal_models?
   research_sessions     research_sessions[]
   relationship_stages   relationship_stages?
-  user_interests        user_interests[]
-  saved_global_updates  saved_global_updates[]
 
   @@index([email])
 }
@@ -526,21 +524,21 @@ enum SourceType {
 }
 
 model research_sessions {
-  id                     String                    @id @default(uuid())
-  userId                 String
-  query                  String
-  objective              String?
-  depth                  ResearchDepth             @default(QUICK)
-  status                 ResearchStatus            @default(PLANNING)
-  personalInterpretation String?                   @db.Text
-  recommendation         String?                   @db.Text
-  createdAt              DateTime                  @default(now())
-  updatedAt              DateTime                  @updatedAt
-  completedAt            DateTime?
-  users                  users                     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  sources                research_sources[]
-  findings               research_findings[]
-  contradictions         research_contradictions[]
+  id                    String           @id @default(uuid())
+  userId                String
+  query                 String
+  objective             String?
+  depth                 ResearchDepth    @default(QUICK)
+  status                ResearchStatus   @default(PLANNING)
+  personalInterpretation String?         @db.Text
+  recommendation        String?          @db.Text
+  createdAt             DateTime         @default(now())
+  updatedAt             DateTime         @updatedAt
+  completedAt           DateTime?
+  users                 users            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sources               research_sources[]
+  findings              research_findings[]
+  contradictions        research_contradictions[]
 
   @@index([userId])
   @@index([userId, status])
@@ -548,259 +546,47 @@ model research_sessions {
 }
 
 model research_sources {
-  id               String            @id @default(uuid())
-  sessionId        String
-  title            String
-  url              String
-  publisher        String?
-  author           String?
-  publishedDate    DateTime?
-  sourceType       SourceType        @default(SECONDARY)
-  credibilityScore Float             @default(0.5)
-  relevanceScore   Float             @default(0.5)
-  content          String?           @db.Text
-  rawClaims        String?           @db.Text
-  session          research_sessions @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  id              String      @id @default(uuid())
+  sessionId       String
+  title           String
+  url             String
+  publisher       String?
+  author          String?
+  publishedDate   DateTime?
+  sourceType      SourceType  @default(SECONDARY)
+  credibilityScore Float      @default(0.5)
+  relevanceScore  Float       @default(0.5)
+  content         String?     @db.Text
+  rawClaims       String?     @db.Text
+  session         research_sessions @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 
   @@index([sessionId])
   @@index([sessionId, relevanceScore])
 }
 
 model research_findings {
-  id                String            @id @default(uuid())
-  sessionId         String
-  category          String
-  finding           String            @db.Text
-  confidence        Float             @default(0.5)
-  sourceIds         String[]
-  personalRelevance String?           @db.Text
-  session           research_sessions @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  id              String      @id @default(uuid())
+  sessionId       String
+  category        String
+  finding         String      @db.Text
+  confidence      Float       @default(0.5)
+  sourceIds       String[]
+  personalRelevance String?   @db.Text
+  session         research_sessions @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 
   @@index([sessionId])
   @@index([sessionId, category])
 }
 
 model research_contradictions {
-  id          String            @id @default(uuid())
-  sessionId   String
-  claimA      String            @db.Text
-  claimB      String            @db.Text
-  sourceAId   String
-  sourceBId   String
-  explanation String            @db.Text
-  session     research_sessions @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  id              String      @id @default(uuid())
+  sessionId       String
+  claimA          String      @db.Text
+  claimB          String      @db.Text
+  sourceAId       String
+  sourceBId       String
+  explanation     String      @db.Text
+  session         research_sessions @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 
   @@index([sessionId])
 }
-
-// ============================================================================
-// GLOBAL UPDATES ENGINE MODELS
-// ============================================================================
-
-enum EventStatus {
-  ACTIVE
-  DEVELOPING
-  RESOLVED
-  STALE
-  DISPUTED
-}
-
-enum EventType {
-  BREAKING
-  TRENDING
-  ANALYSIS
-  MILESTONE
-  POLICY
-  MARKET
-  SCIENCE
-  CULTURE
-  TECHNOLOGY
-  BUSINESS
-  FASHION
-  AFRICA
-}
-
-enum ConfidenceLevel {
-  VERY_LOW
-  LOW
-  MEDIUM
-  HIGH
-  VERY_HIGH
-}
-
-enum ContentType {
-  GLOBAL_UPDATE
-  RECOMMENDED
-  SPONSORED
-}
-
-model global_events {
-  id        String    @id @default(uuid())
-  headline  String
-  summary   String    @db.Text
-  eventType EventType @default(ANALYSIS)
-  topics    String[]
-  entities  String[]
-  locations String[]
-
-  // Timestamps & Freshness
-  firstDetectedAt DateTime  @default(now())
-  latestUpdateAt  DateTime  @updatedAt
-  publishedAt     DateTime?
-  lastVerifiedAt  DateTime?
-  staleAt         DateTime?
-
-  // Scoring
-  importanceScore      Float @default(0)
-  confidenceScore      Float @default(0)
-  globalRelevanceScore Float @default(0)
-  freshnessScore       Float @default(0)
-  sourceQualityScore   Float @default(0)
-
-  // Content layers
-  whatHappened    String  @db.Text
-  whatItMeans     String  @db.Text
-  whatIsUncertain String? @db.Text
-  timelineJson    String? @db.Text
-
-  // Meta
-  status                   EventStatus @default(ACTIVE)
-  contentType              ContentType @default(GLOBAL_UPDATE)
-  sourceCount              Int         @default(0)
-  contradictingSourceCount Int         @default(0)
-  isDeveloping             Boolean     @default(false)
-
-  // Africa layer
-  africanCountries String[]
-  africanTopics    String[]
-
-  // Relations
-  sources   global_event_sources[]
-  savedBy   saved_global_updates[]
-  analytics global_update_analytics[]
-  rankings  global_update_rankings[]
-
-    @@index([status, latestUpdateAt])
-  @@index([status, importanceScore])
-  @@index([eventType, status])
-  @@index([topics])
-  @@index([africanCountries])
-  @@index([firstDetectedAt])
-  @@index([latestUpdateAt])
-  @@index([importanceScore])
-  @@index([contentType])
-}
-
-model global_event_sources {
-  id               String     @id @default(uuid())
-  eventId          String?
-  title            String
-  publisher        String?
-  author           String?
-  url              String
-  publicationDate  DateTime?
-  retrievedAt      DateTime   @default(now())
-  sourceType       SourceType @default(SECONDARY)
-  country          String?
-  topic            String?
-  credibilityScore Float      @default(0.5)
-  relevanceScore   Float      @default(0.5)
-  content          String?    @db.Text
-  rawClaims        String?    @db.Text
-  isContradictory  Boolean    @default(false)
-  contradictsId    String?
-
-  event global_events? @relation(fields: [eventId], references: [id], onDelete: Cascade)
-
-  @@index([eventId])
-  @@index([eventId, credibilityScore])
-  @@index([url])
-  @@index([publicationDate])
-}
-
-model global_event_clusters {
-  id               String   @id @default(uuid())
-  canonicalEventId String   @unique
-  eventIds         String[]
-  similarityHash   String   @unique
-  topicFingerprint String?
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
-
-  @@index([similarityHash])
-  @@index([canonicalEventId])
-}
-
-model user_interests {
-  id         String   @id @default(uuid())
-  userId     String
-  topic      String
-  weight     Float    @default(1.0)
-  isFollowed Boolean  @default(true)
-  isHidden   Boolean  @default(false)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-
-  users users @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([userId, topic])
-  @@index([userId])
-  @@index([userId, isFollowed])
-}
-
-model saved_global_updates {
-  id              String   @id @default(uuid())
-  userId          String
-  eventId         String?
-  reasonForSaving String?  @db.Text
-  savedAt         DateTime @default(now())
-
-  users users         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  event global_events ? @relation(fields: [eventId], references: [id], onDelete: Cascade)
-
-  @@unique([userId, eventId])
-  @@index([userId])
-  @@index([eventId])
-}
-
-model global_update_rankings {
-  id                String        @id @default(uuid())
-  userId            String
-  eventId           String
-  compositeScore    Float         @default(0)
-  relevanceScore    Float         @default(0)
-  freshnessScore    Float         @default(0)
-  significanceScore Float         @default(0)
-  userAffinityScore Float         @default(0)
-  shownAt           DateTime?
-  hiddenAt          DateTime?
-  createdAt         DateTime      @default(now())
-  event             global_events @relation(fields: [eventId], references: [id], onDelete: Cascade)
-
-  @@unique([userId, eventId])
-  @@index([userId, compositeScore])
-  @@index([userId, shownAt])
-}
-
-model global_update_analytics {
-  id            String    @id @default(uuid())
-  eventId       String
-  userId        String?
-  impressionAt  DateTime  @default(now())
-  openAt        DateTime?
-  sourceClickAt DateTime?
-  saveAt        DateTime?
-  researchAt    DateTime?
-  hideAt        DateTime?
-  notRelevantAt DateTime?
-  sponsored     Boolean   @default(false)
-  topic         String?
-
-  event global_events @relation(fields: [eventId], references: [id], onDelete: Cascade)
-
-  @@index([eventId])
-  @@index([userId])
-  @@index([sponsored])
-  @@index([impressionAt])
-}
-
